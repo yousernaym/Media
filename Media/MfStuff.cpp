@@ -1,5 +1,8 @@
 #include "MfStuff.h"
 
+const int MAX_AUDIO_FILENAME_LENGTH = 1000;
+char audioFileName[MAX_AUDIO_FILENAME_LENGTH];
+
 //From encoding.cpp
 BOOL openAudioFileForEncoding(const WCHAR *file); 
 BOOL closeAudioFileForEncoding();
@@ -32,8 +35,14 @@ BOOL closeMF()
 	return b;
 }
 
+char *getAudioFilePath()
+{
+	return audioFileName;
+}
+
 BOOL openAudioFile(char* file)
 {
+	strcpy_s(audioFileName, file);
 	if (!file || file[0] == 0)
 		return TRUE;
 	closeAudioFile();

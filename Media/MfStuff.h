@@ -16,6 +16,7 @@ extern "C"
 {
 	__declspec(dllexport) BOOL initMF();
 	__declspec(dllexport) BOOL closeMF();
+	__declspec(dllexport) char *getAudioFilePath();
 	__declspec(dllexport) BOOL openAudioFile(char* file);
 	__declspec(dllexport) BOOL closeAudioFile();
 }
