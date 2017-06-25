@@ -1,12 +1,14 @@
 #include "encoding.h"
+#include <Codecapi.h>
 
-GUID VIDEO_ENCODING_FORMAT = MFVideoFormat_WMV1;
+GUID VIDEO_ENCODING_FORMAT = MFVideoFormat_H264;
+//GUID VIDEO_ENCODING_FORMAT = MFVideoFormat_WMV1;
 //GUID VIDEO_ENCODING_FORMAT = MFVideoFormat_MSS2;
 //GUID VIDEO_ENCODING_FORMAT = MFVideoFormat_MP4S;
 GUID VIDEO_INPUT_FORMAT = MFVideoFormat_RGB32;
-GUID AUDIO_OUTPUT_FORMAT = MFAudioFormat_WMAudioV9;
+//GUID AUDIO_OUTPUT_FORMAT = MFAudioFormat_WMAudioV9;
 //GUID AUDIO_OUTPUT_FORMAT = MFAudioFormat_WMAudio_Lossless;
-//GUID AUDIO_OUTPUT_FORMAT = MFAudioFormat_AAC;
+GUID AUDIO_OUTPUT_FORMAT = MFAudioFormat_AAC;
 //GUID AUDIO_OUTPUT_FORMAT = MFAudioFormat_PCM;
 
 IMFSourceReader *pSourceReader = 0;
@@ -92,8 +94,12 @@ bool beginVideoEnc(char *outputFile, VideoFormat vidFmt, bool  _bVideo)
 	videoFormat = vidFmt;
 	IMFMediaType *pMediaType = NULL;
         
-    HRESULT hr = MFCreateSinkWriterFromURL(wOutputFile, NULL, NULL, &pWriter);
-
+	//IMFAttributes *writerAttributes;
+	//MFCreateAttributes(&writerAttributes, 1);
+	//writerAttributes->SetGUID(MF_TRANSCODE_CONTAINERTYPE, MFTranscodeContainerType_MPEG4);
+	HRESULT hr = MFCreateSinkWriterFromURL(wOutputFile, NULL, NULL, &pWriter);
+	//SafeRelease(&writerAttributes);
+	
     if (bVideo)
 	{
 		if (SUCCEEDED(hr) && bSingleVideoBuffer)
@@ -106,11 +112,14 @@ bool beginVideoEnc(char *outputFile, VideoFormat vidFmt, bool  _bVideo)
 			hr = pMediaType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);     
 		if (SUCCEEDED(hr))
 			hr = pMediaType->SetGUID(MF_MT_SUBTYPE, VIDEO_ENCODING_FORMAT);
+		if (SUCCEEDED(hr))
+			hr = pMediaType->SetUINT32(MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_High);
+		
 		
 		if (SUCCEEDED(hr))
 			hr = pMediaType->SetUINT32(MF_MT_AVG_BITRATE, videoFormat.bitRate);   
-		//if (SUCCEEDED(hr))
-			//hr = pMediaType->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);   
+		if (SUCCEEDED(hr))
+			hr = pMediaType->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);   
 		if (SUCCEEDED(hr))
 			hr = MFSetAttributeSize(pMediaType, MF_MT_FRAME_SIZE, videoFormat.width, videoFormat.height);
 		if (SUCCEEDED(hr))
