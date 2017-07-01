@@ -1,5 +1,10 @@
 #include "encoding.h"
 #include <Codecapi.h>
+#define _USE_MATH_DEFINES
+#include <math.h>
+
+const float PI = 3.1415926535f;
+const float PId2 = PI / 2.0f;
 
 GUID VIDEO_ENCODING_FORMAT = MFVideoFormat_H264;
 //GUID VIDEO_ENCODING_FORMAT = MFVideoFormat_WMV1;
@@ -84,12 +89,7 @@ bool beginVideoEnc(char *outputFile, VideoFormat vidFmt, bool  _bVideo)
 
 	static WCHAR wOutputFile[1000];
 	mbToWcString(wOutputFile, outputFile);
-	//static WCHAR wAudioFile[1000];
-	//bAudio = audioFile && audioFile[0] != 0;
-	//if (bAudio)
-		//mbToWcString(wAudioFile, audioFile);
-	//bAudio = audioMemFileSize > 0;
-	bAudio = true;
+	bAudio = pSourceReader != 0;
 
 	videoFormat = vidFmt;
 	IMFMediaType *pMediaType = NULL;
@@ -112,8 +112,9 @@ bool beginVideoEnc(char *outputFile, VideoFormat vidFmt, bool  _bVideo)
 			hr = pMediaType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);     
 		if (SUCCEEDED(hr))
 			hr = pMediaType->SetGUID(MF_MT_SUBTYPE, VIDEO_ENCODING_FORMAT);
-		if (SUCCEEDED(hr))
-			hr = pMediaType->SetUINT32(MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_High);
+		 if(SUCCEEDED(hr))
+			//hr = pMediaType->SetUINT32(MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_High);
+			 hr = pMediaType->SetUINT32(MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_Base);
 		
 		
 		if (SUCCEEDED(hr))
@@ -157,7 +158,7 @@ bool beginVideoEnc(char *outputFile, VideoFormat vidFmt, bool  _bVideo)
 		}
 	}
     
-    if (bAudio)
+    if (pSourceReader) //audio
 	{
 		//Set the sink audio output type
 		if (SUCCEEDED(hr))
@@ -287,6 +288,107 @@ bool beginVideoEnc(char *outputFile, VideoFormat vidFmt, bool  _bVideo)
     return SUCCEEDED(hr);
 }
 
+DWORD sampleCubeMap(float coordX, float coordY, float coordZ, const DWORD *face0, const DWORD *face1, const DWORD *face2, const DWORD *face3, const DWORD *face4, const DWORD *face5, int faceSide);
+bool writeFrameCube(DWORD *videoFrameBuffer, LONGLONG rtStart, LONGLONG &rtDuration, double audioOffset, bool bFlush, const DWORD *cmFace0, const DWORD *cmFace1, const DWORD *cmFace2, const DWORD *cmFace3, const DWORD *cmFace4, const DWORD *cmFace5, int cmFaceSide, int videoFrameX, int videoFrameY)
+{
+	for (int y = 0; y < videoFrameY; y++)
+	{
+		for (int x = 0; x < videoFrameX; x++)
+		{
+			float normX = 2.0f * x / videoFrameX - 1.0f;
+			float normY = 2.0f * y / videoFrameY - 1.0f;
+			float theta = -normX * PI;
+			float phi = normY * PId2;
+			//float phi = (float)Math.Asin(y);
+			float cmCoordX = cos(phi) * cos(theta);
+			float cmCoordY = sin(phi);
+			float cmCoordZ = cos(phi) * sin(theta);
+			videoFrameBuffer[y * videoFrameX + x] = sampleCubeMap(cmCoordX, cmCoordY, cmCoordZ, cmFace0, cmFace1, cmFace2, cmFace3, cmFace4, cmFace5, cmFaceSide);
+		}
+	}
+	return writeFrame(videoFrameBuffer, rtStart, rtDuration, audioOffset, bFlush);
+}
+
+DWORD sampleCubeMap(float coordX, float coordY, float coordZ, const DWORD *face0, const DWORD *face1, const DWORD *face2, const DWORD *face3, const DWORD *face4, const DWORD *face5, int faceSide)
+{
+	const DWORD *face;
+	float absX = abs(coordX);
+	float absY = abs(coordY);
+	float absZ = abs(coordZ);
+
+	bool isXPositive = coordX > 0;
+	bool isYPositive = coordY > 0;
+	bool isZPositive = coordZ > 0;
+
+	float maxAxis, uc, vc;
+
+	// POSITIVE X
+	if (isXPositive && absX >= absY && absX >= absZ)
+	{
+		// u (0 to 1) goes from +z to -z
+		// v (0 to 1) goes from -y to +y
+		maxAxis = absX;
+		uc = -coordZ;
+		vc = coordY;
+		face = face0;
+	}
+	// NEGATIVE X
+	else if (!isXPositive && absX >= absY && absX >= absZ)
+	{
+		// u (0 to 1) goes from -z to +z
+		// v (0 to 1) goes from -y to +y
+		maxAxis = absX;
+		uc = coordZ;
+		vc = coordY;
+		face = face1;
+	}
+	// POSITIVE Y
+	else if (isYPositive && absY >= absX && absY >= absZ)
+	{
+		// u (0 to 1) goes from -x to +x
+		// v (0 to 1) goes from +z to -z
+		maxAxis = absY;
+		uc = coordX;
+		vc = -coordZ;
+		face = face2;
+	}
+	// NEGATIVE Y
+	else if (!isYPositive && absY >= absX && absY >= absZ)
+	{
+		// u (0 to 1) goes from -x to +x
+		// v (0 to 1) goes from -z to +z
+		maxAxis = absY;
+		uc = coordX;
+		vc = coordZ;
+		face = face3;
+	}
+	// POSITIVE Z
+	else if (isZPositive && absZ >= absX && absZ >= absY)
+	{
+		// u (0 to 1) goes from -x to +x
+		// v (0 to 1) goes from -y to +y
+		maxAxis = absZ;
+		uc = coordX;
+		vc = coordY;
+		face = face4;
+	}
+	// NEGATIVE Z
+	else //if (!isZPositive && absZ >= absX && absZ >= absY)
+	{
+		// u (0 to 1) goes from +x to -x
+		// v (0 to 1) goes from -y to +y
+		maxAxis = absZ;
+		uc = -coordX;
+		vc = coordY;
+		face = face5;
+	}
+
+	// Convert range from -1 to 1 to 0 to cubemap size
+	int u = (int)(0.5f * (uc / maxAxis + 1.0f) * (faceSide - 1));
+	int v = (int)(0.5f * (vc / maxAxis + 1.0f) * (faceSide - 1));
+	return face[v * faceSide + u];
+}
+
 bool writeFrame(const DWORD *sourceVideoFrame, LONGLONG rtStart, LONGLONG &rtDuration, double audioOffset, bool bFlush)
 {
     if (rtDuration == 0)
@@ -382,7 +484,7 @@ HRESULT writeSamples(IMFSample *pSample, LONGLONG rtStart, LONGLONG rtDuration, 
 			hr = pWriter->WriteSample(videoStreamIndex, pSample);
 	
 		currentVideoSample++;
-		//if (SUCCEEDED(hr) && bFlush)
+		//if (SUCCEEDED(hr) && currentVideoSample % 300 == 0) //&& bFlush)
 			//pWriter->Flush(videoStreamIndex);
 	}
 	
