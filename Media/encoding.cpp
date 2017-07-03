@@ -6,26 +6,16 @@
 const float PI = 3.1415926535f;
 const float PId2 = PI / 2.0f;
 
-GUID VIDEO_ENCODING_FORMAT = MFVideoFormat_H264;
-//GUID VIDEO_ENCODING_FORMAT = MFVideoFormat_WMV1;
-//GUID VIDEO_ENCODING_FORMAT = MFVideoFormat_MSS2;
-//GUID VIDEO_ENCODING_FORMAT = MFVideoFormat_MP4S;
-GUID VIDEO_INPUT_FORMAT = MFVideoFormat_RGB32;
-//GUID AUDIO_OUTPUT_FORMAT = MFAudioFormat_WMAudioV9;
-//GUID AUDIO_OUTPUT_FORMAT = MFAudioFormat_WMAudio_Lossless;
-GUID AUDIO_OUTPUT_FORMAT = MFAudioFormat_AAC;
-//GUID AUDIO_OUTPUT_FORMAT = MFAudioFormat_PCM;
-
 IMFSourceReader *pSourceReader = 0;
 IMFSinkWriter *pWriter = 0;
 IMFMediaBuffer *pVideoFrameBuffer = 0;
 IMFSample *pVideoFrameSample = 0;
-int currentVideoSample;
+//int currentVideoSample;
 DWORD videoStreamIndex;
 DWORD audioStreamIndex;
 LONGLONG lastAudioTimeStamp;
 IMFSample *pEmptyAudioSample = 0;
-int currentAudioSample;
+//int currentAudioSample;
 DWORD audioSrstreamFlags;
 bool bAudio;
 bool bVideo;
@@ -41,7 +31,7 @@ HRESULT createVideoSampleAndBuffer(IMFSample **ppSample, IMFMediaBuffer **ppBuff
 	const DWORD cbBuffer = cbWidth * videoFormat.height;
 	 
     HRESULT hr = MFCreateMemoryBuffer(cbBuffer, &pBuffer);
-		
+			
 	if (SUCCEEDED(hr))
 		hr = MFCreateSample(&pSample);
 	if (SUCCEEDED(hr))
@@ -64,8 +54,6 @@ HRESULT createEmptyAudioSample(IMFSample **ppSample)
 	if (SUCCEEDED(hr))
 	{
 		ZeroMemory(pData, length);
-		//for (int i=0;i<length;i++)
-			//pData[i] = rand();
 		hr = pBuffer->Unlock();
 	}
 	if (SUCCEEDED(hr))
@@ -81,8 +69,8 @@ HRESULT createEmptyAudioSample(IMFSample **ppSample)
 bool beginVideoEnc(char *outputFile, VideoFormat vidFmt, bool  _bVideo)
 {
     lastAudioTimeStamp = 0;
-	currentVideoSample = 0;
-	currentAudioSample = 0;
+	//currentVideoSample = 0;
+	//currentAudioSample = 0;
 	audioSrstreamFlags = 0;
 	
 	bVideo = _bVideo;
@@ -111,12 +99,9 @@ bool beginVideoEnc(char *outputFile, VideoFormat vidFmt, bool  _bVideo)
 		if (SUCCEEDED(hr))
 			hr = pMediaType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);     
 		if (SUCCEEDED(hr))
-			hr = pMediaType->SetGUID(MF_MT_SUBTYPE, VIDEO_ENCODING_FORMAT);
+			hr = pMediaType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_H264);
 		 if(SUCCEEDED(hr))
-			//hr = pMediaType->SetUINT32(MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_High);
-			 hr = pMediaType->SetUINT32(MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_Base);
-		
-		
+			hr = pMediaType->SetUINT32(MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_High);
 		if (SUCCEEDED(hr))
 			hr = pMediaType->SetUINT32(MF_MT_AVG_BITRATE, videoFormat.bitRate);   
 		if (SUCCEEDED(hr))
@@ -125,8 +110,8 @@ bool beginVideoEnc(char *outputFile, VideoFormat vidFmt, bool  _bVideo)
 			hr = MFSetAttributeSize(pMediaType, MF_MT_FRAME_SIZE, videoFormat.width, videoFormat.height);
 		if (SUCCEEDED(hr))
 			hr = MFSetAttributeRatio(pMediaType, MF_MT_FRAME_RATE, videoFormat.fps, 1);
-		//if (SUCCEEDED(hr))
-			//hr = MFSetAttributeRatio(pMediaType, MF_MT_PIXEL_ASPECT_RATIO, 1, 1);   
+		if (SUCCEEDED(hr))
+			hr = MFSetAttributeRatio(pMediaType, MF_MT_PIXEL_ASPECT_RATIO, 1, 1);
 		if (SUCCEEDED(hr))
 		{		
 			hr = pWriter->AddStream(pMediaType, &videoStreamIndex);   
@@ -139,18 +124,16 @@ bool beginVideoEnc(char *outputFile, VideoFormat vidFmt, bool  _bVideo)
 		if (SUCCEEDED(hr))
 			hr = pMediaType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);   
 		if (SUCCEEDED(hr))
-			hr = pMediaType->SetGUID(MF_MT_SUBTYPE, VIDEO_INPUT_FORMAT);
-		//if (SUCCEEDED(hr))
-			//hr = pMediaType->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);   
+			hr = pMediaType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_RGB32);
+		if (SUCCEEDED(hr))
+			hr = pMediaType->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);   
 		if (SUCCEEDED(hr))
 			hr = MFSetAttributeSize(pMediaType, MF_MT_FRAME_SIZE, videoFormat.width, videoFormat.height);
 		if (SUCCEEDED(hr))
 			hr = MFSetAttributeRatio(pMediaType, MF_MT_FRAME_RATE, videoFormat.fps, 1);   
-		//if (SUCCEEDED(hr))
-			//hr = MFSetAttributeRatio(pMediaType, MF_MT_PIXEL_ASPECT_RATIO, 1, 1);   
+		if (SUCCEEDED(hr))
+			hr = MFSetAttributeRatio(pMediaType, MF_MT_PIXEL_ASPECT_RATIO, videoFormat.aspectNumerator, videoFormat.aspectDenominator);
     
-		//if (SUCCEEDED(hr))
-	//		hr = pMediaType->SetGUID(MF_MT_SUBTYPE, VIDEO_INPUT_FORMAT);     
 		if (SUCCEEDED(hr))
 		{
 			hr = pWriter->SetInputMediaType(videoStreamIndex, pMediaType, NULL);   
@@ -166,7 +149,7 @@ bool beginVideoEnc(char *outputFile, VideoFormat vidFmt, bool  _bVideo)
 		if (SUCCEEDED(hr))
 			hr = pMediaType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Audio);
 		if (SUCCEEDED(hr))
-			hr = pMediaType->SetGUID(MF_MT_SUBTYPE, AUDIO_OUTPUT_FORMAT);
+			hr = pMediaType->SetGUID(MF_MT_SUBTYPE, MFAudioFormat_AAC);
 		if (SUCCEEDED(hr))
 			hr=pMediaType->SetUINT32( MF_MT_AUDIO_SAMPLES_PER_SECOND, videoFormat.audioSampleRate);
 		int bytesPerSec;
@@ -213,20 +196,7 @@ bool beginVideoEnc(char *outputFile, VideoFormat vidFmt, bool  _bVideo)
 
 		//Set the intermediate audio media type (sink input and source reader output)
 	
-		//Create source reader
-		if (SUCCEEDED(hr))
-		{	
-			//hr = openAudioFileForEncoding(wAudioFile);
-			/*IMFByteStream *audioByteStream;
-			hr = MFCreateTempFile(MF_FILE_ACCESSMODE::MF_ACCESSMODE_READWRITE, MF_FILE_OPENMODE::MF_OPENMODE_RESET_IF_EXIST, MF_FILE_FLAGS::MF_FILEFLAGS_NONE, &audioByteStream);
-			if (SUCCEEDED(hr))
-			{
-				ULONG bytesWritten = 0;
-				hr = audioByteStream->Write(audioMemFile, audioMemFileSize, &bytesWritten);
-				if (SUCCEEDED(hr) && bytesWritten == audioMemFileLength)
-					hr = MFCreateSourceReaderFromByteStream(audioByteStream, 0, &pSourceReader);
-			}*/
-		}
+		
 		//IMFMediaType *native = 0;
 		//if (SUCCEEDED(hr))
 		//	hr = pSourceReader->GetNativeMediaType(0, 0, &native);
@@ -289,7 +259,7 @@ bool beginVideoEnc(char *outputFile, VideoFormat vidFmt, bool  _bVideo)
 }
 
 DWORD sampleCubeMap(float coordX, float coordY, float coordZ, const DWORD *face0, const DWORD *face1, const DWORD *face2, const DWORD *face3, const DWORD *face4, const DWORD *face5, int faceSide);
-bool writeFrameCube(DWORD *videoFrameBuffer, LONGLONG rtStart, LONGLONG &rtDuration, double audioOffset, bool bFlush, const DWORD *cmFace0, const DWORD *cmFace1, const DWORD *cmFace2, const DWORD *cmFace3, const DWORD *cmFace4, const DWORD *cmFace5, int cmFaceSide, int videoFrameX, int videoFrameY)
+bool writeFrameCube(DWORD *videoFrameBuffer, LONGLONG rtStart, LONGLONG &rtDuration, double audioOffset, const DWORD *cmFace0, const DWORD *cmFace1, const DWORD *cmFace2, const DWORD *cmFace3, const DWORD *cmFace4, const DWORD *cmFace5, int cmFaceSide, int videoFrameX, int videoFrameY)
 {
 	for (int y = 0; y < videoFrameY; y++)
 	{
@@ -306,7 +276,7 @@ bool writeFrameCube(DWORD *videoFrameBuffer, LONGLONG rtStart, LONGLONG &rtDurat
 			videoFrameBuffer[y * videoFrameX + x] = sampleCubeMap(cmCoordX, cmCoordY, cmCoordZ, cmFace0, cmFace1, cmFace2, cmFace3, cmFace4, cmFace5, cmFaceSide);
 		}
 	}
-	return writeFrame(videoFrameBuffer, rtStart, rtDuration, audioOffset, bFlush);
+	return writeFrame(videoFrameBuffer, rtStart, rtDuration, audioOffset);
 }
 
 DWORD sampleCubeMap(float coordX, float coordY, float coordZ, const DWORD *face0, const DWORD *face1, const DWORD *face2, const DWORD *face3, const DWORD *face4, const DWORD *face5, int faceSide)
@@ -389,7 +359,7 @@ DWORD sampleCubeMap(float coordX, float coordY, float coordZ, const DWORD *face0
 	return face[v * faceSide + u];
 }
 
-bool writeFrame(const DWORD *sourceVideoFrame, LONGLONG rtStart, LONGLONG &rtDuration, double audioOffset, bool bFlush)
+bool writeFrame(const DWORD *sourceVideoFrame, LONGLONG rtStart, LONGLONG &rtDuration, double audioOffset)
 {
     if (rtDuration == 0)
 		MFFrameRateToAverageTimePerFrame(videoFormat.fps, 1, (UINT64*)&rtDuration);
@@ -412,7 +382,7 @@ bool writeFrame(const DWORD *sourceVideoFrame, LONGLONG rtStart, LONGLONG &rtDur
 	}
 
 	if (SUCCEEDED(hr))
-		hr = writeSamples(pSample, rtStart, rtDuration, LONGLONG(audioOffset * 10000000.0), bFlush);
+		hr = writeSamples(pSample, rtStart, rtDuration, LONGLONG(audioOffset * 10000000.0));
 	
 	if (!bSingleVideoBuffer)
 	{
@@ -453,26 +423,13 @@ HRESULT copyVideoFrameToBuffer(IMFMediaBuffer *pBuffer, const DWORD *source)
 	return hr;
 }
 
-HRESULT writeSamples(IMFSample *pSample, LONGLONG rtStart, LONGLONG rtDuration, LONGLONG audioOffset, bool bFlush)
+HRESULT writeSamples(IMFSample *pSample, LONGLONG rtStart, LONGLONG rtDuration, LONGLONG audioOffset)
 {
-	HRESULT hr;
-//for (int f = 0;f<2000;f++)
-//{
-	hr = S_OK;
-	//IMFSample *pSample = 0;
+	HRESULT hr = S_OK;
 	//Video sample----------------------
 	// Create a media sample and add the buffer to the sample.
     if (bVideo)
 	{
-		//SafeRelease(&pVideoFrameSample);
-		//MFCreateSample(&pVideoFrameSample);
-		//if (SUCCEEDED(hr) && currentVideoSample == 0)	
-			//hr = pVideoFrameSample->SetUINT32( MFSampleExtension_Discontinuity, TRUE );
-		//if (SUCCEEDED(hr))
-			//hr = pVideoFrameSample->AddBuffer(pVideoFrameBuffer);
-		//if (SUCCEEDED(hr) && currentVideoSample == 1)
-			//hr = pVideoFrameSample->SetUINT32( MFSampleExtension_Discontinuity, FALSE );
-		
 		// Set the time stamp and the duration.
 		if (SUCCEEDED(hr))
 			hr = pSample->SetSampleTime(rtStart);
@@ -483,11 +440,8 @@ HRESULT writeSamples(IMFSample *pSample, LONGLONG rtStart, LONGLONG rtDuration, 
 		if (SUCCEEDED(hr))
 			hr = pWriter->WriteSample(videoStreamIndex, pSample);
 	
-		currentVideoSample++;
-		//if (SUCCEEDED(hr) && currentVideoSample % 300 == 0) //&& bFlush)
-			//pWriter->Flush(videoStreamIndex);
+		//currentVideoSample++;
 	}
-	
 
 	//---------------------------------------------
 	//Audio sample
@@ -501,10 +455,10 @@ HRESULT writeSamples(IMFSample *pSample, LONGLONG rtStart, LONGLONG rtDuration, 
 		{
 			if (SUCCEEDED(hr))
 			{
-				if (currentAudioSample == 0)
-					hr = pEmptyAudioSample->SetUINT32( MFSampleExtension_Discontinuity, TRUE );
-				else if (currentAudioSample == 1)
-					hr = pEmptyAudioSample->SetUINT32( MFSampleExtension_Discontinuity, FALSE );
+				//if (currentAudioSample == 0)
+					//hr = pEmptyAudioSample->SetUINT32( MFSampleExtension_Discontinuity, TRUE );
+				//else if (currentAudioSample == 1)
+//					hr = pEmptyAudioSample->SetUINT32( MFSampleExtension_Discontinuity, FALSE );
 			}
 			
 			if (SUCCEEDED(hr))
@@ -513,10 +467,8 @@ HRESULT writeSamples(IMFSample *pSample, LONGLONG rtStart, LONGLONG rtDuration, 
 				hr = pEmptyAudioSample->SetSampleTime(rtStart);
 			if (SUCCEEDED(hr))
 				hr = pWriter->WriteSample(audioStreamIndex, pEmptyAudioSample);
-			currentAudioSample++;
-			//if (currentAudioSample % 1 == 0)
-				//pWriter->Flush(audioStreamIndex);
-
+			//currentAudioSample++;
+			
 			//SafeRelease(&pSrSample);
 		}
 		else
@@ -529,13 +481,13 @@ HRESULT writeSamples(IMFSample *pSample, LONGLONG rtStart, LONGLONG rtDuration, 
 					continue;
 				if (!pSrSample)
 				{
-					if (SUCCEEDED(hr))
-						hr = pWriter->Flush(audioStreamIndex);
-					currentAudioSample = 0;
+					//if (SUCCEEDED(hr))
+						//hr = pWriter->Flush(audioStreamIndex);
+					//currentAudioSample = 0;
 					break;
 				}
-				if (currentAudioSample == 0 && SUCCEEDED(hr))
-					hr = pSrSample->SetUINT32( MFSampleExtension_Discontinuity, TRUE );
+				//if (currentAudioSample == 0 && SUCCEEDED(hr))
+					//hr = pSrSample->SetUINT32( MFSampleExtension_Discontinuity, TRUE );
 
 				//LONGLONG duration;
 				//if (SUCCEEDED(hr))
@@ -548,9 +500,7 @@ HRESULT writeSamples(IMFSample *pSample, LONGLONG rtStart, LONGLONG rtDuration, 
 					hr = pWriter->WriteSample(audioStreamIndex, pSrSample);
 				SafeRelease(&pSrSample);
 				
-				currentAudioSample++;
-				//if (currentAudioSample % 100 == 0)
-					//pWriter->Flush(audioStreamIndex);
+				//currentAudioSample++;
 				if (FAILED(hr))
 					break;
 				loops++;
@@ -565,11 +515,6 @@ HRESULT writeSamples(IMFSample *pSample, LONGLONG rtStart, LONGLONG rtDuration, 
 	//----------------------------------------------
 	return hr;
 }
-
-//bool addAudioSampleToVideo(LONGLONG rtStart, LONGLONG &rtDuration, bool bFlush)
-//{
-//	return true;
-//}
 
 void endVideoEnc()
 {
