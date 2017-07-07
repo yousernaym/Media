@@ -152,42 +152,13 @@ bool beginVideoEnc(char *outputFile, VideoFormat vidFmt, bool  _bVideo)
 			hr = pMediaType->SetGUID(MF_MT_SUBTYPE, MFAudioFormat_AAC);
 		if (SUCCEEDED(hr))
 			hr=pMediaType->SetUINT32( MF_MT_AUDIO_SAMPLES_PER_SECOND, videoFormat.audioSampleRate);
-		int bytesPerSec;
-		int blockAlign;
-		if (videoFormat.audioSampleRate == 48000)
-		{
-			bytesPerSec = 24000;
-			blockAlign = 4096;
-		}
-		else if (videoFormat.audioSampleRate == 44100)
-		{
-			bytesPerSec = 32004;
-			blockAlign = 5945;
-			//bytesPerSec  = 144004;
-			//blockAlign = 13375;
-		}
-		else
-			assert(0);
-		//blockAlign = 4;
-		//bytesPerSec = 192000;
 		if (SUCCEEDED(hr))
-			hr=pMediaType->SetUINT32( MF_MT_AUDIO_AVG_BYTES_PER_SECOND, bytesPerSec );
+			hr=pMediaType->SetUINT32( MF_MT_AUDIO_AVG_BYTES_PER_SECOND, 24000 );
 		if (SUCCEEDED(hr))
 			hr=pMediaType->SetUINT32( MF_MT_AUDIO_NUM_CHANNELS, 2 );
 		if (SUCCEEDED(hr))
 			hr=pMediaType->SetUINT32( MF_MT_AUDIO_BITS_PER_SAMPLE, 16 );
-	      
-		//if (SUCCEEDED(hr))
-			//pMediaType->SetUINT32( MF_MT_AUDIO_PREFER_WAVEFORMATEX, 1 ) ;
-		//if (SUCCEEDED(hr))
-			//pMediaType->SetUINT32( MF_MT_ALL_SAMPLES_INDEPENDENT, 1 ) ;
-		//if (SUCCEEDED(hr))
-			//pMediaType->SetUINT32( MF_MT_FIXED_SIZE_SAMPLES, 1 ) ;
 		
-		if (SUCCEEDED(hr))
-			pMediaType->SetUINT32( MF_MT_AUDIO_BLOCK_ALIGNMENT, blockAlign ) ;
-	
-	
 		if (SUCCEEDED(hr))
 		{
 			hr = pWriter->AddStream(pMediaType, &audioStreamIndex);   
@@ -196,57 +167,31 @@ bool beginVideoEnc(char *outputFile, VideoFormat vidFmt, bool  _bVideo)
 
 		//Set the intermediate audio media type (sink input and source reader output)
 	
-		
-		//IMFMediaType *native = 0;
-		//if (SUCCEEDED(hr))
-		//	hr = pSourceReader->GetNativeMediaType(0, 0, &native);
-		//UINT32 samplingRate;
-		//native->GetUINT32(MF_MT_AUDIO_SAMPLES_PER_SECOND, &samplingRate);
-	
 		if (SUCCEEDED(hr))
 			hr = MFCreateMediaType(&pMediaType);
 		if (SUCCEEDED(hr))
 			hr = pMediaType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Audio);
 		if (SUCCEEDED(hr))
 			hr = pMediaType->SetGUID(MF_MT_SUBTYPE, MFAudioFormat_PCM);
-		//if (SUCCEEDED(hr))
-			//hr=pMediaType->SetUINT32( MF_MT_AUDIO_SAMPLES_PER_SECOND, 48000);
-		//if (SUCCEEDED(hr))
-		//	hr=pMediaType->SetUINT32( MF_MT_AUDIO_AVG_BYTES_PER_SECOND, 2*samplingRate*2 );
-		//if (SUCCEEDED(hr))
-		//	hr=pMediaType->SetUINT32( MF_MT_AUDIO_NUM_CHANNELS, 2 );
-		//if (SUCCEEDED(hr))
-		//	hr=pMediaType->SetUINT32( MF_MT_AUDIO_BITS_PER_SAMPLE, 16 );
-		////if (SUCCEEDED(hr))
-		//	//pMediaType->SetUINT32( MF_MT_AUDIO_PREFER_WAVEFORMATEX, 1 );
-		//if (SUCCEEDED(hr))
-		//	pMediaType->SetUINT32( MF_MT_AUDIO_BLOCK_ALIGNMENT, 4 );
-	
+		if (SUCCEEDED(hr))
+			hr=pMediaType->SetUINT32( MF_MT_AUDIO_SAMPLES_PER_SECOND, videoFormat.audioSampleRate);
+		if (SUCCEEDED(hr))
+			hr=pMediaType->SetUINT32( MF_MT_AUDIO_NUM_CHANNELS, 2 );
+		if (SUCCEEDED(hr))
+			hr=pMediaType->SetUINT32( MF_MT_AUDIO_BITS_PER_SAMPLE, 16 );
+
 		if (SUCCEEDED(hr))
 			hr = pSourceReader->SetCurrentMediaType(0, 0, pMediaType);
 		SafeRelease(&pMediaType);
 		if (SUCCEEDED(hr))
 			hr = pSourceReader->GetCurrentMediaType(0, &pMediaType);
 
-		/*UINT32 sps;
-		pMediaType->GetUINT32(MF_MT_AUDIO_SAMPLES_PER_SECOND, &sps);
-		UINT32 bps;
-		pMediaType->GetUINT32(MF_MT_AUDIO_AVG_BYTES_PER_SECOND, &bps);
-		UINT32 nc;
-		pMediaType->GetUINT32(MF_MT_AUDIO_NUM_CHANNELS, &nc);
-		UINT32 bits;
-		pMediaType->GetUINT32(MF_MT_AUDIO_BITS_PER_SAMPLE, &bits);
-		UINT32 block;
-		pMediaType->GetUINT32(MF_MT_AUDIO_BLOCK_ALIGNMENT, &block);*/
-		
 		if (SUCCEEDED(hr))
 			hr = pWriter->SetInputMediaType(audioStreamIndex, pMediaType, NULL);
-		
 		SafeRelease(&pMediaType);	
 	
 		if (SUCCEEDED(hr))
 			hr = createEmptyAudioSample(&pEmptyAudioSample);
-		
 	}
 
 	// Tell the sink writer to start accepting data.
@@ -439,8 +384,6 @@ HRESULT writeSamples(IMFSample *pSample, LONGLONG rtStart, LONGLONG rtDuration, 
 		// Send the sample to the Sink Writer.
 		if (SUCCEEDED(hr))
 			hr = pWriter->WriteSample(videoStreamIndex, pSample);
-	
-		//currentVideoSample++;
 	}
 
 	//---------------------------------------------
@@ -448,28 +391,15 @@ HRESULT writeSamples(IMFSample *pSample, LONGLONG rtStart, LONGLONG rtDuration, 
 	//----------------------------------------------
 	if (bAudio)
 	{
-		int loops = 0;
 		IMFSample *pSrSample=0;
-	
 		if (audioSrstreamFlags & MF_SOURCE_READERF_ENDOFSTREAM || rtStart < audioOffset - rtDuration)
 		{
-			if (SUCCEEDED(hr))
-			{
-				//if (currentAudioSample == 0)
-					//hr = pEmptyAudioSample->SetUINT32( MFSampleExtension_Discontinuity, TRUE );
-				//else if (currentAudioSample == 1)
-//					hr = pEmptyAudioSample->SetUINT32( MFSampleExtension_Discontinuity, FALSE );
-			}
-			
 			if (SUCCEEDED(hr))
 				hr = pEmptyAudioSample->SetSampleDuration(rtDuration);
 			if (SUCCEEDED(hr))
 				hr = pEmptyAudioSample->SetSampleTime(rtStart);
 			if (SUCCEEDED(hr))
 				hr = pWriter->WriteSample(audioStreamIndex, pEmptyAudioSample);
-			//currentAudioSample++;
-			
-			//SafeRelease(&pSrSample);
 		}
 		else
 		{
@@ -480,35 +410,16 @@ HRESULT writeSamples(IMFSample *pSample, LONGLONG rtStart, LONGLONG rtDuration, 
 				if (pSrSample && lastAudioTimeStamp + audioOffset < 0)
 					continue;
 				if (!pSrSample)
-				{
-					//if (SUCCEEDED(hr))
-						//hr = pWriter->Flush(audioStreamIndex);
-					//currentAudioSample = 0;
 					break;
-				}
-				//if (currentAudioSample == 0 && SUCCEEDED(hr))
-					//hr = pSrSample->SetUINT32( MFSampleExtension_Discontinuity, TRUE );
-
-				//LONGLONG duration;
-				//if (SUCCEEDED(hr))
-					//pSrSample->GetSampleDuration(&duration);
 				if (SUCCEEDED(hr))
 					hr = pSrSample->SetSampleTime(lastAudioTimeStamp + audioOffset);
-				//if (SUCCEEDED(hr))
-					//hr = pSrSample->SetSampleDuration(rtDuration);
 				if (SUCCEEDED(hr))
 					hr = pWriter->WriteSample(audioStreamIndex, pSrSample);
 				SafeRelease(&pSrSample);
-				
-				//currentAudioSample++;
 				if (FAILED(hr))
 					break;
-				loops++;
-				//if (loops==35)
-					//break;
 			};
 		}
-		//std::cout<<loops<<std::endl;
 	}
 	rtStart += rtDuration;
 //}
