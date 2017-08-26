@@ -141,7 +141,7 @@ bool beginVideoEnc(char *outputFile, VideoFormat vidFmt, bool  _bVideo)
 		}
 	}
     
-    if (pSourceReader) //audio
+    if (bAudio) //audio
 	{
 		//Set the sink audio output type
 		if (SUCCEEDED(hr))
@@ -150,6 +150,8 @@ bool beginVideoEnc(char *outputFile, VideoFormat vidFmt, bool  _bVideo)
 			hr = pMediaType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Audio);
 		if (SUCCEEDED(hr))
 			hr = pMediaType->SetGUID(MF_MT_SUBTYPE, MFAudioFormat_AAC);
+		//if (SUCCEEDED(hr))
+			//hr = pMediaType->SetGUID(MF_MT_SUBTYPE, MFAudioFormat_FLAC);
 		if (SUCCEEDED(hr))
 			hr=pMediaType->SetUINT32( MF_MT_AUDIO_SAMPLES_PER_SECOND, videoFormat.audioSampleRate);
 		if (SUCCEEDED(hr))
@@ -178,7 +180,7 @@ bool beginVideoEnc(char *outputFile, VideoFormat vidFmt, bool  _bVideo)
 		if (SUCCEEDED(hr))
 			hr=pMediaType->SetUINT32( MF_MT_AUDIO_NUM_CHANNELS, 2 );
 		if (SUCCEEDED(hr))
-			hr=pMediaType->SetUINT32( MF_MT_AUDIO_BITS_PER_SAMPLE, 16 );
+			hr=pMediaType->SetUINT32( MF_MT_AUDIO_BITS_PER_SAMPLE, 16);
 
 		if (SUCCEEDED(hr))
 			hr = pSourceReader->SetCurrentMediaType(0, 0, pMediaType);
