@@ -36,7 +36,7 @@ double getAudioLength()
 BOOL playbackIsRunning()
 {
 	if (!pClock)
-		return false;
+		return FALSE;
 	MFCLOCK_STATE clockState=MFCLOCK_STATE_INVALID;
 	pClock->GetState(0, &clockState);
 	return clockState == MFCLOCK_STATE_RUNNING;
@@ -53,7 +53,7 @@ double getPlaybackPos()
 BOOL startPlaybackAtTime(double timeS)
 {
 	if (!pMediaSession)
-		return true;
+		return TRUE;
 	PROPVARIANT pv;
 	pv.vt = VT_I8;
 	pv.hVal.QuadPart = LONGLONG(timeS * 10000000);;
@@ -67,7 +67,7 @@ BOOL startPlaybackAtTime(double timeS)
 BOOL startPlayback()
 {
 	if (!pMediaSession)
-		return true;
+		return TRUE;
 	PROPVARIANT pv;
 	pv.vt = VT_EMPTY;
 	HRESULT hr = pMediaSession->Start(0, &pv);
@@ -79,7 +79,7 @@ BOOL startPlayback()
 BOOL stopPlayback()
 {
 	if (!pMediaSession)
-		return true;
+		return TRUE;
 	HRESULT hr = pMediaSession->Stop();
 	return SUCCEEDED(hr);
 }
@@ -87,7 +87,7 @@ BOOL stopPlayback()
 BOOL pausePlayback()
 {
 	if (!pMediaSession)
-		return true;
+		return TRUE;
 	HRESULT hr = pMediaSession->Pause();
 	return SUCCEEDED(hr);
 }

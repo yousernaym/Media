@@ -15,15 +15,15 @@ BOOL initMF()
 {
 	HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
     if (FAILED(hr))
-		return false;
+		return FALSE;
     hr = MFStartup(MF_VERSION);
 	if (FAILED(hr))
 	{
 		CoUninitialize();
-		return false;
+		return FALSE;
 	}
 		
-	return true;
+	return TRUE;
 }
 
 BOOL closeMF()

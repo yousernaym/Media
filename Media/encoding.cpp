@@ -17,9 +17,9 @@ LONGLONG lastAudioTimeStamp;
 IMFSample *pEmptyAudioSample = 0;
 //int currentAudioSample;
 DWORD audioSrstreamFlags;
-bool bAudio;
-bool bVideo;
-bool bSingleVideoBuffer = false;
+BOOL bAudio;
+BOOL bVideo;
+BOOL bSingleVideoBuffer = FALSE;
 
 VideoFormat videoFormat;
 
@@ -66,7 +66,7 @@ HRESULT createEmptyAudioSample(IMFSample **ppSample)
 	return hr;
 }
 
-bool beginVideoEnc(char *outputFile, VideoFormat vidFmt, bool  _bVideo)
+BOOL beginVideoEnc(char *outputFile, VideoFormat vidFmt, BOOL  _bVideo)
 {
     lastAudioTimeStamp = 0;
 	//currentVideoSample = 0;
@@ -103,7 +103,7 @@ bool beginVideoEnc(char *outputFile, VideoFormat vidFmt, bool  _bVideo)
 		 if(SUCCEEDED(hr))
 			hr = pMediaType->SetUINT32(MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_High);
 		if (SUCCEEDED(hr))
-			hr = pMediaType->SetUINT32(MF_MT_AVG_BITRATE, videoFormat.bitRate);   
+			hr = pMediaType->SetUINT32(MF_MT_AVG_BITRATE, videoFormat.bitRate);
 		if (SUCCEEDED(hr))
 			hr = pMediaType->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);   
 		if (SUCCEEDED(hr))
@@ -206,7 +206,7 @@ bool beginVideoEnc(char *outputFile, VideoFormat vidFmt, bool  _bVideo)
 }
 
 DWORD sampleCubeMap(float coordX, float coordY, float coordZ, const DWORD *face0, const DWORD *face1, const DWORD *face2, const DWORD *face3, const DWORD *face4, const DWORD *face5, int faceSide);
-bool writeFrameCube(DWORD *videoFrameBuffer, LONGLONG rtStart, LONGLONG &rtDuration, double audioOffset, const DWORD *cmFace0, const DWORD *cmFace1, const DWORD *cmFace2, const DWORD *cmFace3, const DWORD *cmFace4, const DWORD *cmFace5, int cmFaceSide, int videoFrameX, int videoFrameY)
+BOOL writeFrameCube(DWORD *videoFrameBuffer, LONGLONG rtStart, LONGLONG &rtDuration, double audioOffset, const DWORD *cmFace0, const DWORD *cmFace1, const DWORD *cmFace2, const DWORD *cmFace3, const DWORD *cmFace4, const DWORD *cmFace5, int cmFaceSide, int videoFrameX, int videoFrameY)
 {
 	for (int y = 0; y < videoFrameY; y++)
 	{
@@ -233,9 +233,9 @@ DWORD sampleCubeMap(float coordX, float coordY, float coordZ, const DWORD *face0
 	float absY = abs(coordY);
 	float absZ = abs(coordZ);
 
-	bool isXPositive = coordX > 0;
-	bool isYPositive = coordY > 0;
-	bool isZPositive = coordZ > 0;
+	BOOL isXPositive = coordX > 0;
+	BOOL isYPositive = coordY > 0;
+	BOOL isZPositive = coordZ > 0;
 
 	float maxAxis, uc, vc;
 
@@ -306,7 +306,7 @@ DWORD sampleCubeMap(float coordX, float coordY, float coordZ, const DWORD *face0
 	return face[v * faceSide + u];
 }
 
-bool writeFrame(const DWORD *sourceVideoFrame, LONGLONG rtStart, LONGLONG &rtDuration, double audioOffset)
+BOOL writeFrame(const DWORD *sourceVideoFrame, LONGLONG rtStart, LONGLONG &rtDuration, double audioOffset)
 {
     if (rtDuration == 0)
 		MFFrameRateToAverageTimePerFrame(videoFormat.fps, 1, (UINT64*)&rtDuration);
@@ -317,7 +317,7 @@ bool writeFrame(const DWORD *sourceVideoFrame, LONGLONG rtStart, LONGLONG &rtDur
 	HRESULT hr = S_OK;
 	if (bVideo)
 	{
-		if (bSingleVideoBuffer == true)
+		if (bSingleVideoBuffer == TRUE)
 		{
 			pSample = pVideoFrameSample;
 			pBuffer = pVideoFrameBuffer;
