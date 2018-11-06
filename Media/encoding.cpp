@@ -79,6 +79,15 @@ BOOL beginVideoEnc(char *outputFile, VideoFormat vidFmt, BOOL  _bVideo)
 	mbToWcString(wOutputFile, outputFile);
 	bAudio = pSourceReader != 0;
 
+	if (bAudio)
+	{
+		PROPVARIANT pv;
+		pv.vt = VT_I8;
+		pv.hVal.QuadPart = LONGLONG(0);;
+		GUID nullGuid;
+		memset(&nullGuid, 0, sizeof(GUID));
+		pSourceReader->SetCurrentPosition(nullGuid, pv);
+	}
 	videoFormat = vidFmt;
 	IMFMediaType *pMediaType = NULL;
         

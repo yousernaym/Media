@@ -37,7 +37,7 @@ BOOL playbackIsRunning()
 {
 	if (!pClock)
 		return FALSE;
-	MFCLOCK_STATE clockState=MFCLOCK_STATE_INVALID;
+	MFCLOCK_STATE clockState = MFCLOCK_STATE_INVALID;
 	pClock->GetState(0, &clockState);
 	return clockState == MFCLOCK_STATE_RUNNING;
 }
