@@ -6,7 +6,7 @@ struct VideoFormat
 {
 	UINT32 width;
 	UINT32 height;
-	UINT32 fps;
+	float fps;
 	UINT32 bitRate;
 	UINT32 audioSampleRate;
 	UINT32 aspectNumerator;

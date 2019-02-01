@@ -22,6 +22,7 @@ BOOL bVideo;
 BOOL bSingleVideoBuffer = FALSE;
 
 VideoFormat videoFormat;
+UINT32 fpsDenominator = 100;
 
 HRESULT createVideoSampleAndBuffer(IMFSample **ppSample, IMFMediaBuffer **ppBuffer)
 {
@@ -118,7 +119,7 @@ BOOL beginVideoEnc(char *outputFile, VideoFormat vidFmt, BOOL  _bVideo)
 		if (SUCCEEDED(hr))
 			hr = MFSetAttributeSize(pMediaType, MF_MT_FRAME_SIZE, videoFormat.width, videoFormat.height);
 		if (SUCCEEDED(hr))
-			hr = MFSetAttributeRatio(pMediaType, MF_MT_FRAME_RATE, videoFormat.fps, 1);
+			hr = MFSetAttributeRatio(pMediaType, MF_MT_FRAME_RATE, UINT32(videoFormat.fps * fpsDenominator), fpsDenominator);
 		if (SUCCEEDED(hr))
 			hr = MFSetAttributeRatio(pMediaType, MF_MT_PIXEL_ASPECT_RATIO, 1, 1);
 		if (SUCCEEDED(hr))
@@ -139,7 +140,7 @@ BOOL beginVideoEnc(char *outputFile, VideoFormat vidFmt, BOOL  _bVideo)
 		if (SUCCEEDED(hr))
 			hr = MFSetAttributeSize(pMediaType, MF_MT_FRAME_SIZE, videoFormat.width, videoFormat.height);
 		if (SUCCEEDED(hr))
-			hr = MFSetAttributeRatio(pMediaType, MF_MT_FRAME_RATE, videoFormat.fps, 1);   
+			hr = MFSetAttributeRatio(pMediaType, MF_MT_FRAME_RATE, UINT32(videoFormat.fps * fpsDenominator), fpsDenominator);
 		if (SUCCEEDED(hr))
 			hr = MFSetAttributeRatio(pMediaType, MF_MT_PIXEL_ASPECT_RATIO, videoFormat.aspectNumerator, videoFormat.aspectDenominator);
     
@@ -318,7 +319,7 @@ DWORD sampleCubeMap(float coordX, float coordY, float coordZ, const DWORD *face0
 BOOL writeFrame(const DWORD *sourceVideoFrame, LONGLONG rtStart, LONGLONG &rtDuration, double audioOffset)
 {
     if (rtDuration == 0)
-		MFFrameRateToAverageTimePerFrame(videoFormat.fps, 1, (UINT64*)&rtDuration);
+		MFFrameRateToAverageTimePerFrame(UINT32(videoFormat.fps * fpsDenominator), fpsDenominator, (UINT64*)&rtDuration);
 	
 	IMFSample *pSample = NULL;
     IMFMediaBuffer *pBuffer = NULL;
