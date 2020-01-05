@@ -26,7 +26,7 @@ UINT32 fpsDenominator = 100;
 
 HRESULT createVideoSampleAndBuffer(IMFSample **ppSample, IMFMediaBuffer **ppBuffer)
 {
-	IMFSample *pSample;
+	IMFSample *pSample = NULL;
 	IMFMediaBuffer *pBuffer;
 	const LONG cbWidth = 4 * videoFormat.width;
 	const DWORD cbBuffer = cbWidth * videoFormat.height;
@@ -151,7 +151,7 @@ BOOL beginVideoEnc(char *outputFile, VideoFormat vidFmt, BOOL  _bVideo)
 		}
 	}
     
-    if (bAudio) //audio
+    if (bAudio)
 	{
 		//Set the sink audio output type
 		if (SUCCEEDED(hr))
@@ -160,12 +160,14 @@ BOOL beginVideoEnc(char *outputFile, VideoFormat vidFmt, BOOL  _bVideo)
 			hr = pMediaType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Audio);
 		if (SUCCEEDED(hr))
 			hr = pMediaType->SetGUID(MF_MT_SUBTYPE, MFAudioFormat_AAC);
+		/*if (SUCCEEDED(hr))
+			hr = pMediaType->SetGUID(MF_MT_AAC_AUDIO_PROFILE_LEVEL_INDICATION, 0x2a);*/
 		//if (SUCCEEDED(hr))
 			//hr = pMediaType->SetGUID(MF_MT_SUBTYPE, MFAudioFormat_FLAC);
 		if (SUCCEEDED(hr))
 			hr=pMediaType->SetUINT32( MF_MT_AUDIO_SAMPLES_PER_SECOND, videoFormat.audioSampleRate);
 		if (SUCCEEDED(hr))
-			hr=pMediaType->SetUINT32( MF_MT_AUDIO_AVG_BYTES_PER_SECOND, 24000 );
+			hr=pMediaType->SetUINT32( MF_MT_AUDIO_AVG_BYTES_PER_SECOND, 24000 ); //= 192 kbps which is the highest supported bitrate for AAC in Media Foundation.
 		if (SUCCEEDED(hr))
 			hr=pMediaType->SetUINT32( MF_MT_AUDIO_NUM_CHANNELS, 2 );
 		if (SUCCEEDED(hr))
@@ -452,6 +454,7 @@ void endVideoEnc()
 BOOL openAudioFileForEncoding(const WCHAR *file)
 {
 	HRESULT hr = MFCreateSourceReaderFromURL(file, 0, &pSourceReader);
+	//20 * log10(abs(value))
 	return SUCCEEDED(hr);
 }
 

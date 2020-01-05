@@ -22,6 +22,7 @@ BOOL closeAudioFileForPlayback()
 	SafeRelease(&pClock);
 	SafeRelease(&pMediaSource);
 	SafeRelease(&pMediaSession);
+	pPresDesc = 0;
 	return SUCCEEDED(hr);
 }
 
