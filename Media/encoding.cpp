@@ -2,6 +2,7 @@
 #include <Codecapi.h>
 #define _USE_MATH_DEFINES
 #include <math.h>
+#include "movie.h"
 
 const float PI = 3.1415926535f;
 const float PId2 = PI / 2.0f;
@@ -23,6 +24,8 @@ BOOL bSingleVideoBuffer = FALSE;
 
 VideoFormat videoFormat;
 UINT32 fpsDenominator = 100;
+
+MovieWriter* writer = NULL;
 
 HRESULT createVideoSampleAndBuffer(IMFSample **ppSample, IMFMediaBuffer **ppBuffer)
 {
@@ -69,6 +72,7 @@ HRESULT createEmptyAudioSample(IMFSample **ppSample)
 
 BOOL beginVideoEnc(char *outputFile, VideoFormat vidFmt, BOOL  _bVideo)
 {
+	writer = new MovieWriter("test", vidFmt.width, vidFmt.height);
     lastAudioTimeStamp = 0;
 	//currentVideoSample = 0;
 	//currentAudioSample = 0;
@@ -320,7 +324,9 @@ DWORD sampleCubeMap(float coordX, float coordY, float coordZ, const DWORD *face0
 
 BOOL writeFrame(const DWORD *sourceVideoFrame, LONGLONG rtStart, LONGLONG &rtDuration, double audioOffset)
 {
-    if (rtDuration == 0)
+	writer->addFrame((uint8_t*)sourceVideoFrame);
+	return TRUE;
+	if (rtDuration == 0)
 		MFFrameRateToAverageTimePerFrame(UINT32(videoFormat.fps * fpsDenominator), fpsDenominator, (UINT64*)&rtDuration);
 	
 	IMFSample *pSample = NULL;
@@ -443,6 +449,8 @@ HRESULT writeSamples(IMFSample *pSample, LONGLONG rtStart, LONGLONG rtDuration, 
 
 void endVideoEnc()
 {
+	delete writer;
+	writer = NULL;
 	if (pWriter)
 		pWriter->Finalize();
 	SafeRelease(&pVideoFrameBuffer);

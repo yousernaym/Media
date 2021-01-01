@@ -158,10 +158,12 @@
     <ClCompile Include="encoding.cpp" />
     <ClCompile Include="MfStuff.cpp" />
     <ClCompile Include="playback.cpp" />
+    <ClCompile Include="writer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="encoding.h" />
     <ClInclude Include="MfStuff.h" />
+    <ClInclude Include="movie.h" />
     <ClInclude Include="playback.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

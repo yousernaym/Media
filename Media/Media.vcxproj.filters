@@ -24,6 +24,9 @@
     <ClCompile Include="playback.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="writer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="encoding.h">
@@ -33,6 +36,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="playback.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="movie.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
