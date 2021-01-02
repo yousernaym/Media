@@ -11,6 +11,7 @@
 #include <vector>
 
 //extern IMFMediaSession *pMediaSession;
+#define __STDC_CONSTANT_MACROS
 
 extern "C"
 {
@@ -19,6 +20,15 @@ extern "C"
 	__declspec(dllexport) char *getAudioFilePath();
 	__declspec(dllexport) BOOL openAudioFile(char* file);
 	__declspec(dllexport) BOOL closeAudioFile();
+
+	#include <libavutil/avassert.h>
+	#include <libavutil/channel_layout.h>
+	#include <libavutil/opt.h>
+	#include <libavutil/mathematics.h>
+	#include <libavutil/timestamp.h>
+	#include <libavformat/avformat.h>
+	#include <libswscale/swscale.h>
+	#include <libswresample/swresample.h>
 }
 
 const int maxFileNameLength = 1000;

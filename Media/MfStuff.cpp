@@ -22,7 +22,8 @@ BOOL initMF()
 		CoUninitialize();
 		return FALSE;
 	}
-		
+	av_register_all();
+
 	return TRUE;
 }
 
@@ -49,14 +50,14 @@ BOOL openAudioFile(char* file)
 	static wchar_t wfile[maxFileNameLength];
 	mbToWcString(wfile, file);
 	BOOL b = openAudioFileForPlayback(wfile);
-	BOOL b2 = openAudioFileForEncoding(wfile);
-	return b && b2;
+	//BOOL b2 = openAudioFileForEncoding(wfile);
+	return b;//&& b2;
 }
 BOOL closeAudioFile()
 {
 	BOOL b = closeAudioFileForPlayback();
-	BOOL b2 = closeAudioFileForEncoding();
-	return b && b2;
+	//BOOL b2 = closeAudioFileForEncoding();
+	return b;//&& b2;
 }
 #pragma endregion
 

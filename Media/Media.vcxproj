@@ -157,6 +157,7 @@
   <ItemGroup>
     <ClCompile Include="encoding.cpp" />
     <ClCompile Include="MfStuff.cpp" />
+    <ClCompile Include="mux.cpp" />
     <ClCompile Include="playback.cpp" />
     <ClCompile Include="writer.cpp" />
   </ItemGroup>

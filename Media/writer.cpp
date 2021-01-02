@@ -40,7 +40,7 @@ width(width_), height(height_), iframe(0), pixels(4 * width * height)
 	AVCodec* codec = avcodec_find_encoder(AV_CODEC_ID_H264);
 	AVDictionary* opt = NULL;
 	av_dict_set(&opt, "preset", "ultrafast", 0);
-	av_dict_set(&opt, "crf", "20", 0);
+	av_dict_set(&opt, "crf", "0", 0);
 	stream = avformat_new_stream(fc, codec);
 	c = stream->codec;
 	c->width = width;
@@ -85,6 +85,8 @@ width(width_), height(height_), iframe(0), pixels(4 * width * height)
 	// After the format, code and general frame data is set,
 	// we can write the video in the frame generation loop:
 	// std::vector<uint8_t> B(width*height*3);
+
+
 }
 
 void MovieWriter::addFrame(const uint8_t* pixels)

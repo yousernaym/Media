@@ -1,36 +1,20 @@
-#include "MfStuff.h"
-#include "encoding.h"
-#include <Codecapi.h>
-#define _USE_MATH_DEFINES
-#include <math.h>
-#include "movie.h"
-
+#define __STDC_CONSTANT_MACROS
+extern "C"
+{
+	#include <libavutil/avassert.h>
+	#include <libavutil/channel_layout.h>
+	#include <libavutil/opt.h>
+	#include <libavutil/mathematics.h>
+	#include <libavutil/timestamp.h>
+	#include <libavformat/avformat.h>
+	#include <libswscale/swscale.h>
+	#include <libswresample/swresample.h>
+}
 #define STREAM_DURATION   10.0
 #define STREAM_FRAME_RATE 25 /* 25 images/s */
 #define STREAM_PIX_FMT    AV_PIX_FMT_YUV420P /* default pix_fmt */
 #define SCALE_FLAGS SWS_BICUBIC
-
-const float PI = 3.1415926535f;
-const float PId2 = PI / 2.0f;
-
-IMFSourceReader *pSourceReader = 0;
-IMFSinkWriter *pWriter = 0;
-IMFMediaBuffer *pVideoFrameBuffer = 0;
-IMFSample *pVideoFrameSample = 0;
-//int currentVideoSample;
-DWORD videoStreamIndex;
-DWORD audioStreamIndex;
-LONGLONG lastAudioTimeStamp;
-IMFSample *pEmptyAudioSample = 0;
-//int currentAudioSample;
-DWORD audioSrstreamFlags;
-BOOL bAudio;
-BOOL bVideo;
-BOOL bSingleVideoBuffer = FALSE;
-
-VideoFormat videoFormat;
-UINT32 fpsDenominator = 100;
-
+// a wrapper around a single output AVStream
 typedef struct OutputStream {
 	AVStream* st;
 	AVCodecContext* enc;
@@ -44,15 +28,15 @@ typedef struct OutputStream {
 	struct SwrContext* swr_ctx;
 } OutputStream;
 
-//MovieWriter* writer = NULL;
-OutputStream video_st = { 0 }, audio_st = { 0 };
-AVOutputFormat* fmt;
-AVFormatContext* oc;
-AVCodec* audio_codec, * video_codec;
-
-int have_video = 0, have_audio = 0;
-int encode_video = 0, encode_audio = 0;
-
+//static void log_packet(const AVFormatContext* fmt_ctx, const AVPacket* pkt)
+//{
+//	AVRational* time_base = &fmt_ctx->streams[pkt->stream_index]->time_base;
+//	printf("pts:%s pts_time:%s dts:%s dts_time:%s duration:%s duration_time:%s stream_index:%d\n",
+//		av_ts2str(pkt->pts), av_ts2timestr(pkt->pts, time_base),
+//		av_ts2str(pkt->dts), av_ts2timestr(pkt->dts, time_base),
+//		av_ts2str(pkt->duration), av_ts2timestr(pkt->duration, time_base),
+//		pkt->stream_index);
+//}
 
 static int write_frame(AVFormatContext* fmt_ctx, const AVRational* time_base, AVStream* st, AVPacket* pkt)
 {
@@ -468,19 +452,45 @@ static void close_stream(AVFormatContext* oc, OutputStream* ost)
 	swr_free(&ost->swr_ctx);
 }
 
-
-BOOL beginVideoEnc(char *outputFile, VideoFormat vidFmt, BOOL  _bVideo)
+/**************************************************************/
+/* media file output */
+int main(int argc, char** argv)
 {
+	OutputStream video_st = { 0 }, audio_st = { 0 };
+	const char* filename;
+	AVOutputFormat* fmt;
+	AVFormatContext* oc;
+	AVCodec* audio_codec, * video_codec;
+	int ret;
+	int have_video = 0, have_audio = 0;
+	int encode_video = 0, encode_audio = 0;
 	AVDictionary* opt = NULL;
-	BOOL ret;
+	int i;
+	/* Initialize libavcodec, and register all codecs and formats. */
+	av_register_all();
+	if (argc < 2) {
+		printf("usage: %s output_file\n"
+			"API example program to output a media file with libavformat.\n"
+			"This program generates a synthetic audio and video stream, encodes and\n"
+			"muxes them into a file named output_file.\n"
+			"The output format is automatically guessed according to the file extension.\n"
+			"Raw images can also be output by using '%%d' in the filename.\n"
+			"\n", argv[0]);
+		return 1;
+	}
+	filename = argv[1];
+	for (i = 2; i + 1 < argc; i += 2) {
+		if (!strcmp(argv[i], "-flags") || !strcmp(argv[i], "-fflags"))
+			av_dict_set(&opt, argv[i] + 1, argv[i + 1], 0);
+	}
 	/* allocate the output media context */
-	avformat_alloc_output_context2(&oc, NULL, NULL, outputFile);
+	avformat_alloc_output_context2(&oc, NULL, NULL, filename);
 	if (!oc) {
 		printf("Could not deduce output format from file extension: using MPEG.\n");
-		avformat_alloc_output_context2(&oc, NULL, "mpeg", outputFile);
+		avformat_alloc_output_context2(&oc, NULL, "mpeg", filename);
 	}
 	if (!oc)
-		return FALSE;
+		return 1;
 	fmt = oc->oformat;
 	/* Add the audio and video streams using the default format codecs
 	 * and initialize the codecs. */
@@ -500,14 +510,14 @@ BOOL beginVideoEnc(char *outputFile, VideoFormat vidFmt, BOOL  _bVideo)
 		open_video(oc, video_codec, &video_st, opt);
 	if (have_audio)
 		open_audio(oc, audio_codec, &audio_st, opt);
-	av_dump_format(oc, 0, outputFile, 1);
+	av_dump_format(oc, 0, filename, 1);
 	/* open the output file, if needed */
 	if (!(fmt->flags & AVFMT_NOFILE)) {
-		ret = avio_open(&oc->pb, outputFile, AVIO_FLAG_WRITE);
+		ret = avio_open(&oc->pb, filename, AVIO_FLAG_WRITE);
 		if (ret < 0) {
-			fprintf(stderr, "Could not open '%s': %s\n", outputFile,
+			fprintf(stderr, "Could not open '%s': %s\n", filename,
 				ret);
-			return FALSE;
+			return 1;
 		}
 	}
 	/* Write the stream header, if any. */
@@ -515,88 +525,19 @@ BOOL beginVideoEnc(char *outputFile, VideoFormat vidFmt, BOOL  _bVideo)
 	if (ret < 0) {
 		fprintf(stderr, "Error occurred when opening output file: %s\n",
 			ret);
-		return FALSE;
+		return 1;
 	}
-	return TRUE;
-}
-
-BOOL writeFrame(const DWORD *sourceVideoFrame, LONGLONG rtStart, LONGLONG &rtDuration, double audioOffset)
-{
-	//writer->addFrame((uint8_t*)sourceVideoFrame);
-	if (encode_video &&
-		(!encode_audio || av_compare_ts(video_st.next_pts, video_st.enc->time_base,
-			audio_st.next_pts, audio_st.enc->time_base) <= 0)) {
-		encode_video = !write_video_frame(oc, &video_st);
-	}
-	else {
-		encode_audio = !write_audio_frame(oc, &audio_st);
-	}
-	return encode_audio | encode_video;
-}
-
-HRESULT writeSamples(IMFSample *pSample, LONGLONG rtStart, LONGLONG rtDuration, LONGLONG audioOffset)
-{
-	HRESULT hr = S_OK;
-	//Video sample----------------------
-	// Create a media sample and add the buffer to the sample.
-    if (bVideo)
-	{
-		// Set the time stamp and the duration.
-		if (SUCCEEDED(hr))
-			hr = pSample->SetSampleTime(rtStart);
-		if (SUCCEEDED(hr))
-			hr = pSample->SetSampleDuration(rtDuration);
-   
-		// Send the sample to the Sink Writer.
-		if (SUCCEEDED(hr))
-			hr = pWriter->WriteSample(videoStreamIndex, pSample);
-	}
-
-	//---------------------------------------------
-	//Audio sample
-	//----------------------------------------------
-	if (bAudio)
-	{
-		IMFSample *pSrSample=0;
-		if (audioSrstreamFlags & MF_SOURCE_READERF_ENDOFSTREAM || rtStart < audioOffset - rtDuration)
-		{
-			if (SUCCEEDED(hr))
-				hr = pEmptyAudioSample->SetSampleDuration(rtDuration);
-			if (SUCCEEDED(hr))
-				hr = pEmptyAudioSample->SetSampleTime(rtStart);
-			if (SUCCEEDED(hr))
-				hr = pWriter->WriteSample(audioStreamIndex, pEmptyAudioSample);
+	while (encode_video || encode_audio) {
+		/* select the stream to encode */
+		if (encode_video &&
+			(!encode_audio || av_compare_ts(video_st.next_pts, video_st.enc->time_base,
+				audio_st.next_pts, audio_st.enc->time_base) <= 0)) {
+			encode_video = !write_video_frame(oc, &video_st);
 		}
-		else
-		{
-			while (lastAudioTimeStamp + audioOffset <= rtStart)
-			{
-				if (SUCCEEDED(hr))
-					hr = pSourceReader->ReadSample(0, 0, 0, &audioSrstreamFlags, &lastAudioTimeStamp, &pSrSample);
-				if (pSrSample && lastAudioTimeStamp + audioOffset < 0)
-					continue;
-				if (!pSrSample)
-					break;
-				if (SUCCEEDED(hr))
-					hr = pSrSample->SetSampleTime(lastAudioTimeStamp + audioOffset);
-				if (SUCCEEDED(hr))
-					hr = pWriter->WriteSample(audioStreamIndex, pSrSample);
-				SafeRelease(&pSrSample);
-				if (FAILED(hr))
-					break;
-			};
+		else {
+			encode_audio = !write_audio_frame(oc, &audio_st);
 		}
 	}
-	rtStart += rtDuration;
-//}
-	//----------------------------------------------
-	return hr;
-}
-
-void endVideoEnc()
-{
-	//delete writer;
-	//writer = NULL;
 	/* Write the trailer, if any. The trailer must be written before you
 	 * close the CodecContexts open when you wrote the header; otherwise
 	 * av_write_trailer() may try to use memory that was freed on
@@ -612,6 +553,5 @@ void endVideoEnc()
 		avio_closep(&oc->pb);
 	/* free the stream */
 	avformat_free_context(oc);
+	return 0;
 }
-
-
