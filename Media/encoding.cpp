@@ -5,31 +5,13 @@
 #include <math.h>
 #include "movie.h"
 
-#define STREAM_DURATION   10.0
-#define STREAM_FRAME_RATE 25 /* 25 images/s */
 #define STREAM_PIX_FMT    AV_PIX_FMT_YUV420P /* default pix_fmt */
 #define SCALE_FLAGS SWS_BICUBIC
 
 const float PI = 3.1415926535f;
 const float PId2 = PI / 2.0f;
 
-IMFSourceReader *pSourceReader = 0;
-IMFSinkWriter *pWriter = 0;
-IMFMediaBuffer *pVideoFrameBuffer = 0;
-IMFSample *pVideoFrameSample = 0;
-//int currentVideoSample;
-DWORD videoStreamIndex;
-DWORD audioStreamIndex;
-LONGLONG lastAudioTimeStamp;
-IMFSample *pEmptyAudioSample = 0;
-//int currentAudioSample;
-DWORD audioSrstreamFlags;
-BOOL bAudio;
-BOOL bVideo;
-BOOL bSingleVideoBuffer = FALSE;
-
 VideoFormat videoFormat;
-UINT32 fpsDenominator = 100;
 
 typedef struct OutputStream {
 	AVStream* st;
@@ -38,13 +20,13 @@ typedef struct OutputStream {
 	int64_t next_pts;
 	int samples_count;
 	AVFrame* frame;
-	AVFrame* tmp_frame;
+	AVFrame* src_frame;
 	float t, tincr, tincr2;
 	struct SwsContext* sws_ctx;
 	struct SwrContext* swr_ctx;
 } OutputStream;
 
-//MovieWriter* writer = NULL;
+MovieWriter* writer = NULL;
 OutputStream video_st = { 0 }, audio_st = { 0 };
 AVOutputFormat* fmt;
 AVFormatContext* oc;
@@ -67,7 +49,8 @@ static int write_frame(AVFormatContext* fmt_ctx, const AVRational* time_base, AV
 /* Add an output stream. */
 static void add_stream(OutputStream* ost, AVFormatContext* oc,
 	AVCodec** codec,
-	enum AVCodecID codec_id)
+	enum AVCodecID codec_id,
+	const VideoFormat &vidFmt)
 {
 	AVCodecContext* c;
 	int i;
@@ -94,15 +77,15 @@ static void add_stream(OutputStream* ost, AVFormatContext* oc,
 	case AVMEDIA_TYPE_AUDIO:
 		c->sample_fmt = (*codec)->sample_fmts ?
 			(*codec)->sample_fmts[0] : AV_SAMPLE_FMT_FLTP;
-		c->bit_rate = 64000;
-		c->sample_rate = 44100;
-		if ((*codec)->supported_samplerates) {
+		//c->bit_rate = 320000;
+		c->sample_rate = 48000;
+		/*if ((*codec)->supported_samplerates) {
 			c->sample_rate = (*codec)->supported_samplerates[0];
 			for (i = 0; (*codec)->supported_samplerates[i]; i++) {
-				if ((*codec)->supported_samplerates[i] == 44100)
-					c->sample_rate = 44100;
+				if ((*codec)->supported_samplerates[i] == 48000)
+					c->sample_rate = 48000;
 			}
-		}
+		}*/
 		c->channels = av_get_channel_layout_nb_channels(c->channel_layout);
 		c->channel_layout = AV_CH_LAYOUT_STEREO;
 		if ((*codec)->channel_layouts) {
@@ -117,18 +100,27 @@ static void add_stream(OutputStream* ost, AVFormatContext* oc,
 		break;
 	case AVMEDIA_TYPE_VIDEO:
 		c->codec_id = codec_id;
-		c->bit_rate = 400000;
+		//c->bit_rate = 400000;
 		/* Resolution must be a multiple of two. */
-		c->width = 352;
-		c->height = 288;
+		c->width = vidFmt.width;
+		c->height = vidFmt.height;
 		/* timebase: This is the fundamental unit of time (in seconds) in terms
 		 * of which frame timestamps are represented. For fixed-fps content,
 		 * timebase should be 1/framerate and timestamp increments should be
 		 * identical to 1. */
-		ost->st->time_base = { 1, STREAM_FRAME_RATE };
+		ost->st->time_base = { 100, (int)(vidFmt.fps * 100) };
 		c->time_base = ost->st->time_base;
 		c->gop_size = 12; /* emit one intra frame every twelve frames at most */
-		c->pix_fmt = STREAM_PIX_FMT;
+		c->pix_fmt = AV_PIX_FMT_YUV420P;
+
+		ost->sws_ctx = sws_getContext(c->width, c->height, AV_PIX_FMT_RGB24, c->width, c->height, c->pix_fmt, SCALE_FLAGS, NULL, NULL, NULL);
+		if (!ost->sws_ctx)
+		{
+			fprintf(stderr,
+				"Could not initialize the conversion context\n");
+			exit(1);
+		}
+
 		if (c->codec_id == AV_CODEC_ID_MPEG2VIDEO) {
 			/* just for testing, we also add B-frames */
 			c->max_b_frames = 2;
@@ -183,10 +175,11 @@ static void open_audio(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, A
 	c = ost->enc;
 	/* open it */
 	av_dict_copy(&opt, opt_arg, 0);
+	av_dict_set(&opt, "crf", "1", 0);
 	ret = avcodec_open2(c, codec, &opt);
 	av_dict_free(&opt);
 	if (ret < 0) {
-		fprintf(stderr, "Could not open audio codec: %s\n", ret);
+		fprintf(stderr, "Could not open audio codec: %d\n", ret);
 		exit(1);
 	}
 	/* init signal generator */
@@ -200,7 +193,7 @@ static void open_audio(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, A
 		nb_samples = c->frame_size;
 	ost->frame = alloc_audio_frame(c->sample_fmt, c->channel_layout,
 		c->sample_rate, nb_samples);
-	ost->tmp_frame = alloc_audio_frame(AV_SAMPLE_FMT_S16, c->channel_layout,
+	ost->src_frame = alloc_audio_frame(AV_SAMPLE_FMT_S16, c->channel_layout,
 		c->sample_rate, nb_samples);
 	/* copy the stream parameters to the muxer */
 	ret = avcodec_parameters_from_context(ost->st->codecpar, c);
@@ -232,13 +225,13 @@ static void open_audio(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, A
  * 'nb_channels' channels. */
 static AVFrame* get_audio_frame(OutputStream* ost)
 {
-	AVFrame* frame = ost->tmp_frame;
+	AVFrame* frame = ost->src_frame;
 	int j, i, v;
 	int16_t* q = (int16_t*)frame->data[0];
 	/* check if we want to generate more frames */
-	if (av_compare_ts(ost->next_pts, ost->enc->time_base,
+	/*if (av_compare_ts(ost->next_pts, ost->enc->time_base,
 		STREAM_DURATION, { 1, 1 }) >= 0)
-		return NULL;
+		return NULL;*/
 	for (j = 0; j < frame->nb_samples; j++) {
 		v = (int)(sin(ost->t) * 10000);
 		for (i = 0; i < ost->enc->channels; i++)
@@ -293,13 +286,13 @@ static int write_audio_frame(AVFormatContext* oc, OutputStream* ost)
 	}
 	ret = avcodec_encode_audio2(c, &pkt, frame, &got_packet);
 	if (ret < 0) {
-		fprintf(stderr, "Error encoding audio frame: %s\n", ret);
+		fprintf(stderr, "Error encoding audio frame: %d\n", ret);
 		exit(1);
 	}
 	if (got_packet) {
 		ret = write_frame(oc, &c->time_base, ost->st, &pkt);
 		if (ret < 0) {
-			fprintf(stderr, "Error while writing audio frame: %s\n",
+			fprintf(stderr, "Error while writing audio frame: %d\n",
 				ret);
 			exit(1);
 		}
@@ -334,6 +327,8 @@ static void open_video(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, A
 	AVCodecContext* c = ost->enc;
 	AVDictionary* opt = NULL;
 	av_dict_copy(&opt, opt_arg, 0);
+	av_dict_set(&opt, "preset", "ultrafast", 0);
+	av_dict_set(&opt, "crf", "0", 0);
 	/* open the codec */
 	ret = avcodec_open2(c, codec, &opt);
 	av_dict_free(&opt);
@@ -347,20 +342,19 @@ static void open_video(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, A
 		fprintf(stderr, "Could not allocate video frame\n");
 		exit(1);
 	}
-	/* If the output format is not YUV420P, then a temporary YUV420P
-	 * picture is needed too. It is then converted to the required
-	 * output format. */
-	ost->tmp_frame = NULL;
-	if (c->pix_fmt != AV_PIX_FMT_YUV420P) {
-		ost->tmp_frame = alloc_picture(AV_PIX_FMT_YUV420P, c->width, c->height);
-		if (!ost->tmp_frame) {
-			fprintf(stderr, "Could not allocate temporary picture\n");
-			exit(1);
-		}
+	
+	//Source frame
+	ost->src_frame = NULL;
+	ost->src_frame = alloc_picture(AV_PIX_FMT_RGB24, c->width, c->height);
+	if (!ost->src_frame)
+	{
+		fprintf(stderr, "Could not allocate temporary picture\n");
+		exit(1);
 	}
 	/* copy the stream parameters to the muxer */
 	ret = avcodec_parameters_from_context(ost->st->codecpar, c);
-	if (ret < 0) {
+	if (ret < 0) 
+	{
 		fprintf(stderr, "Could not copy the stream parameters\n");
 		exit(1);
 	}
@@ -392,36 +386,32 @@ static void fill_yuv_image(AVFrame* pict, int frame_index,
 	}
 }
 
-static AVFrame* get_video_frame(OutputStream* ost)
+static AVFrame* get_video_frame(OutputStream* ost, const uint8_t* pixels)
 {
 	AVCodecContext* c = ost->enc;
 	/* check if we want to generate more frames */
-	if (av_compare_ts(ost->next_pts, c->time_base,
+	/*if (av_compare_ts(ost->next_pts, c->time_base,
 		STREAM_DURATION, { 1, 1 }) >= 0)
-		return NULL;
-	if (c->pix_fmt != AV_PIX_FMT_YUV420P) {
-		/* as we only generate a YUV420P picture, we must convert it
-		 * to the codec pixel format if needed */
-		if (!ost->sws_ctx) {
-			ost->sws_ctx = sws_getContext(c->width, c->height,
-				AV_PIX_FMT_YUV420P,
-				c->width, c->height,
-				c->pix_fmt,
-				SCALE_FLAGS, NULL, NULL, NULL);
-			if (!ost->sws_ctx) {
-				fprintf(stderr,
-					"Could not initialize the conversion context\n");
-				exit(1);
-			}
+		return NULL;*/
+
+	// The AVFrame data will be stored as RGBRGBRGB... row-wise,
+	// from left to right and from top to bottom.
+	AVFrame* rgbpic = ost->src_frame;
+	for (unsigned int y = 0; y < c->height; y++)
+	{
+		for (unsigned int x = 0; x < c->width; x++)
+		{
+			// rgbpic->linesize[0] is equal to width.
+			rgbpic->data[0][y * rgbpic->linesize[0] + 3 * x + 0] = pixels[y * 4 * c->width + 4 * x + 2];
+			rgbpic->data[0][y * rgbpic->linesize[0] + 3 * x + 1] = pixels[y * 4 * c->width + 4 * x + 1];
+			rgbpic->data[0][y * rgbpic->linesize[0] + 3 * x + 2] = pixels[y * 4 * c->width + 4 * x + 0];
 		}
-		fill_yuv_image(ost->tmp_frame, ost->next_pts, c->width, c->height);
-		sws_scale(ost->sws_ctx,
-			(const uint8_t* const*)ost->tmp_frame->data, ost->tmp_frame->linesize,
-			0, c->height, ost->frame->data, ost->frame->linesize);
 	}
-	else {
-		fill_yuv_image(ost->frame, ost->next_pts, c->width, c->height);
-	}
+	//fill_yuv_image(ost->src_frame, ost->next_pts, c->width, c->height);
+	sws_scale(ost->sws_ctx,
+		(const uint8_t* const*)ost->src_frame->data, ost->src_frame->linesize,
+		0, c->height, ost->frame->data, ost->frame->linesize);
+	
 	ost->frame->pts = ost->next_pts++;
 	return ost->frame;
 }
@@ -430,7 +420,7 @@ static AVFrame* get_video_frame(OutputStream* ost)
  * encode one video frame and send it to the muxer
  * return 1 when encoding is finished, 0 otherwise
  */
-static int write_video_frame(AVFormatContext* oc, OutputStream* ost)
+static int write_video_frame(AVFormatContext* oc, OutputStream* ost, const uint8_t* pixels)
 {
 	int ret;
 	AVCodecContext* c;
@@ -438,7 +428,7 @@ static int write_video_frame(AVFormatContext* oc, OutputStream* ost)
 	int got_packet = 0;
 	AVPacket pkt = { 0 };
 	c = ost->enc;
-	frame = get_video_frame(ost);
+	frame = get_video_frame(ost, pixels);
 	av_init_packet(&pkt);
 	/* encode the image */
 	ret = avcodec_encode_video2(c, &pkt, frame, &got_packet);
@@ -463,37 +453,33 @@ static void close_stream(AVFormatContext* oc, OutputStream* ost)
 {
 	avcodec_free_context(&ost->enc);
 	av_frame_free(&ost->frame);
-	av_frame_free(&ost->tmp_frame);
+	av_frame_free(&ost->src_frame);
 	sws_freeContext(ost->sws_ctx);
+	ost->sws_ctx = NULL;
 	swr_free(&ost->swr_ctx);
 }
 
 
 BOOL beginVideoEnc(char *outputFile, VideoFormat vidFmt, BOOL  _bVideo)
 {
+	/*writer = new MovieWriter(outputFile, vidFmt.width, vidFmt.height);
+	return TRUE;*/
 	AVDictionary* opt = NULL;
 	BOOL ret;
 	/* allocate the output media context */
-	avformat_alloc_output_context2(&oc, NULL, NULL, outputFile);
-	if (!oc) {
-		printf("Could not deduce output format from file extension: using MPEG.\n");
-		avformat_alloc_output_context2(&oc, NULL, "mpeg", outputFile);
-	}
+	avformat_alloc_output_context2(&oc, NULL, NULL, "dummy.mov");
 	if (!oc)
 		return FALSE;
 	fmt = oc->oformat;
 	/* Add the audio and video streams using the default format codecs
 	 * and initialize the codecs. */
-	if (fmt->video_codec != AV_CODEC_ID_NONE) {
-		add_stream(&video_st, oc, &video_codec, fmt->video_codec);
-		have_video = 1;
-		encode_video = 1;
-	}
-	if (fmt->audio_codec != AV_CODEC_ID_NONE) {
-		add_stream(&audio_st, oc, &audio_codec, fmt->audio_codec);
-		have_audio = 1;
-		encode_audio = 1;
-	}
+	add_stream(&video_st, oc, &video_codec, AV_CODEC_ID_H264, vidFmt);
+	have_video = 1;
+	encode_video = 1;
+	add_stream(&audio_st, oc, &audio_codec, AV_CODEC_ID_PCM_S24LE, vidFmt);
+	have_audio = 1;
+	encode_audio = 1;
+
 	/* Now that all the parameters are set, we can open the audio and
 	 * video codecs and allocate the necessary encode buffers. */
 	if (have_video)
@@ -522,81 +508,89 @@ BOOL beginVideoEnc(char *outputFile, VideoFormat vidFmt, BOOL  _bVideo)
 
 BOOL writeFrame(const DWORD *sourceVideoFrame, LONGLONG rtStart, LONGLONG &rtDuration, double audioOffset)
 {
-	//writer->addFrame((uint8_t*)sourceVideoFrame);
+	if (writer)
+	{
+		writer->addFrame((uint8_t*)sourceVideoFrame);
+		return TRUE;
+	}
 	if (encode_video &&
 		(!encode_audio || av_compare_ts(video_st.next_pts, video_st.enc->time_base,
 			audio_st.next_pts, audio_st.enc->time_base) <= 0)) {
-		encode_video = !write_video_frame(oc, &video_st);
+		encode_video = !write_video_frame(oc, &video_st, (uint8_t*)sourceVideoFrame);
 	}
 	else {
 		encode_audio = !write_audio_frame(oc, &audio_st);
 	}
 	return encode_audio | encode_video;
 }
-
-HRESULT writeSamples(IMFSample *pSample, LONGLONG rtStart, LONGLONG rtDuration, LONGLONG audioOffset)
-{
-	HRESULT hr = S_OK;
-	//Video sample----------------------
-	// Create a media sample and add the buffer to the sample.
-    if (bVideo)
-	{
-		// Set the time stamp and the duration.
-		if (SUCCEEDED(hr))
-			hr = pSample->SetSampleTime(rtStart);
-		if (SUCCEEDED(hr))
-			hr = pSample->SetSampleDuration(rtDuration);
-   
-		// Send the sample to the Sink Writer.
-		if (SUCCEEDED(hr))
-			hr = pWriter->WriteSample(videoStreamIndex, pSample);
-	}
-
-	//---------------------------------------------
-	//Audio sample
-	//----------------------------------------------
-	if (bAudio)
-	{
-		IMFSample *pSrSample=0;
-		if (audioSrstreamFlags & MF_SOURCE_READERF_ENDOFSTREAM || rtStart < audioOffset - rtDuration)
-		{
-			if (SUCCEEDED(hr))
-				hr = pEmptyAudioSample->SetSampleDuration(rtDuration);
-			if (SUCCEEDED(hr))
-				hr = pEmptyAudioSample->SetSampleTime(rtStart);
-			if (SUCCEEDED(hr))
-				hr = pWriter->WriteSample(audioStreamIndex, pEmptyAudioSample);
-		}
-		else
-		{
-			while (lastAudioTimeStamp + audioOffset <= rtStart)
-			{
-				if (SUCCEEDED(hr))
-					hr = pSourceReader->ReadSample(0, 0, 0, &audioSrstreamFlags, &lastAudioTimeStamp, &pSrSample);
-				if (pSrSample && lastAudioTimeStamp + audioOffset < 0)
-					continue;
-				if (!pSrSample)
-					break;
-				if (SUCCEEDED(hr))
-					hr = pSrSample->SetSampleTime(lastAudioTimeStamp + audioOffset);
-				if (SUCCEEDED(hr))
-					hr = pWriter->WriteSample(audioStreamIndex, pSrSample);
-				SafeRelease(&pSrSample);
-				if (FAILED(hr))
-					break;
-			};
-		}
-	}
-	rtStart += rtDuration;
+//
+//HRESULT writeSamples(IMFSample *pSample, LONGLONG rtStart, LONGLONG rtDuration, LONGLONG audioOffset)
+//{
+//	HRESULT hr = S_OK;
+//	//Video sample----------------------
+//	// Create a media sample and add the buffer to the sample.
+//    if (bVideo)
+//	{
+//		// Set the time stamp and the duration.
+//		if (SUCCEEDED(hr))
+//			hr = pSample->SetSampleTime(rtStart);
+//		if (SUCCEEDED(hr))
+//			hr = pSample->SetSampleDuration(rtDuration);
+//   
+//		// Send the sample to the Sink Writer.
+//		if (SUCCEEDED(hr))
+//			hr = pWriter->WriteSample(videoStreamIndex, pSample);
+//	}
+//
+//	//---------------------------------------------
+//	//Audio sample
+//	//----------------------------------------------
+//	if (bAudio)
+//	{
+//		IMFSample *pSrSample=0;
+//		if (audioSrstreamFlags & MF_SOURCE_READERF_ENDOFSTREAM || rtStart < audioOffset - rtDuration)
+//		{
+//			if (SUCCEEDED(hr))
+//				hr = pEmptyAudioSample->SetSampleDuration(rtDuration);
+//			if (SUCCEEDED(hr))
+//				hr = pEmptyAudioSample->SetSampleTime(rtStart);
+//			if (SUCCEEDED(hr))
+//				hr = pWriter->WriteSample(audioStreamIndex, pEmptyAudioSample);
+//		}
+//		else
+//		{
+//			while (lastAudioTimeStamp + audioOffset <= rtStart)
+//			{
+//				if (SUCCEEDED(hr))
+//					hr = pSourceReader->ReadSample(0, 0, 0, &audioSrstreamFlags, &lastAudioTimeStamp, &pSrSample);
+//				if (pSrSample && lastAudioTimeStamp + audioOffset < 0)
+//					continue;
+//				if (!pSrSample)
+//					break;
+//				if (SUCCEEDED(hr))
+//					hr = pSrSample->SetSampleTime(lastAudioTimeStamp + audioOffset);
+//				if (SUCCEEDED(hr))
+//					hr = pWriter->WriteSample(audioStreamIndex, pSrSample);
+//				SafeRelease(&pSrSample);
+//				if (FAILED(hr))
+//					break;
+//			};
+//		}
+//	}
+//	rtStart += rtDuration;
+////}
+//	//----------------------------------------------
+//	return hr;
 //}
-	//----------------------------------------------
-	return hr;
-}
 
 void endVideoEnc()
 {
-	//delete writer;
-	//writer = NULL;
+	if (writer)
+	{
+		delete writer;
+		writer = NULL;
+		return;
+	}
 	/* Write the trailer, if any. The trailer must be written before you
 	 * close the CodecContexts open when you wrote the header; otherwise
 	 * av_write_trailer() may try to use memory that was freed on

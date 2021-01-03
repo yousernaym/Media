@@ -9,12 +9,14 @@
 
 extern "C"
 {
-	#include <x264.h>
+	//#include <x264.h>
 	#include <libswscale/swscale.h>
 	#include <libavcodec/avcodec.h>
 	#include <libavutil/mathematics.h>
 	#include <libavformat/avformat.h>
 	#include <libavutil/opt.h>
+	#include <libswresample/swresample.h>*/
+	#include <libavutil/avassert.h>
 }
 
 class MovieWriter
