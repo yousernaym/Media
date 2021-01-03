@@ -30,11 +30,46 @@ MovieWriter* writer = NULL;
 OutputStream video_st = { 0 }, audio_st = { 0 };
 AVOutputFormat* fmt;
 AVFormatContext* oc;
+AVFormatContext* audioInputFmtCtx;
 AVCodec* audio_codec, * video_codec;
 
 int have_video = 0, have_audio = 0;
 int encode_video = 0, encode_audio = 0;
 
+static int open_audio_file(const char* filename)
+{
+	int ret;
+	unsigned int i;
+	audioInputFmtCtx = NULL;
+	if ((ret = avformat_open_input(&audioInputFmtCtx, filename, NULL, NULL)) < 0)
+	{
+		av_log(NULL, AV_LOG_ERROR, "Cannot open input file\n");
+		return ret;
+	}
+	if ((ret = avformat_find_stream_info(audioInputFmtCtx, NULL)) < 0) 
+	{
+		av_log(NULL, AV_LOG_ERROR, "Cannot find stream information\n");
+		return ret;
+	}
+	AVStream* stream;
+	AVCodecContext* codec_ctx;
+	stream = audioInputFmtCtx->streams[0];
+	//codec_ctx = stream->codec;
+	codec_ctx = avcodec_alloc_context3();
+
+	if (codec_ctx->codec_type == AVMEDIA_TYPE_AUDIO) 
+	{
+		/* Open decoder */
+		ret = avcodec_open2(codec_ctx, avcodec_find_decoder(codec_ctx->codec_id), NULL);
+		if (ret < 0) 
+		{
+			av_log(NULL, AV_LOG_ERROR, "Failed to open decoder for stream #%u\n", i);
+			return ret;
+		}
+	}
+	av_dump_format(audioInputFmtCtx, 0, filename, 0);
+	return 0;
+}
 
 static int write_frame(AVFormatContext* fmt_ctx, const AVRational* time_base, AVStream* st, AVPacket* pkt)
 {
@@ -168,14 +203,15 @@ static AVFrame* alloc_audio_frame(enum AVSampleFormat sample_fmt,
 
 static void open_audio(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, AVDictionary* opt_arg)
 {
-	AVCodecContext* c;
+	AVCodecContext* encCtx;
+	AVCodecContext* decCtx;
 	int nb_samples;
 	int ret;
 	AVDictionary* opt = NULL;
-	c = ost->enc;
+	encCtx = ost->enc;
 	/* open it */
 	av_dict_copy(&opt, opt_arg, 0);
-	ret = avcodec_open2(c, codec, &opt);
+	ret = avcodec_open2(encCtx, codec, &opt);
 	av_dict_free(&opt);
 	if (ret < 0) {
 		fprintf(stderr, "Could not open audio codec: %d\n", ret);
@@ -183,19 +219,19 @@ static void open_audio(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, A
 	}
 	/* init signal generator */
 	ost->t = 0;
-	ost->tincr = 2 * M_PI * 110.0 / c->sample_rate;
+	ost->tincr = 2 * M_PI * 110.0 / encCtx->sample_rate;
 	/* increment frequency by 110 Hz per second */
-	ost->tincr2 = 2 * M_PI * 110.0 / c->sample_rate / c->sample_rate;
-	if (c->codec->capabilities & AV_CODEC_CAP_VARIABLE_FRAME_SIZE)
+	ost->tincr2 = 2 * M_PI * 110.0 / encCtx->sample_rate / encCtx->sample_rate;
+	if (encCtx->codec->capabilities & AV_CODEC_CAP_VARIABLE_FRAME_SIZE)
 		nb_samples = 10000;
 	else
-		nb_samples = c->frame_size;
-	ost->frame = alloc_audio_frame(c->sample_fmt, c->channel_layout,
-		c->sample_rate, nb_samples);
-	ost->src_frame = alloc_audio_frame(AV_SAMPLE_FMT_S16, c->channel_layout,
-		c->sample_rate, nb_samples);
+		nb_samples = encCtx->frame_size;
+	ost->frame = alloc_audio_frame(encCtx->sample_fmt, encCtx->channel_layout,
+		encCtx->sample_rate, nb_samples);
+	ost->src_frame = alloc_audio_frame(AV_SAMPLE_FMT_S16, encCtx->channel_layout,
+		encCtx->sample_rate, nb_samples);
 	/* copy the stream parameters to the muxer */
-	ret = avcodec_parameters_from_context(ost->st->codecpar, c);
+	ret = avcodec_parameters_from_context(ost->st->codecpar, encCtx);
 	if (ret < 0) {
 		fprintf(stderr, "Could not copy the stream parameters\n");
 		exit(1);
@@ -207,12 +243,12 @@ static void open_audio(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, A
 		exit(1);
 	}
 	/* set options */
-	av_opt_set_int(ost->swr_ctx, "in_channel_count", c->channels, 0);
-	av_opt_set_int(ost->swr_ctx, "in_sample_rate", c->sample_rate, 0);
-	av_opt_set_sample_fmt(ost->swr_ctx, "in_sample_fmt", AV_SAMPLE_FMT_S16, 0);
-	av_opt_set_int(ost->swr_ctx, "out_channel_count", c->channels, 0);
-	av_opt_set_int(ost->swr_ctx, "out_sample_rate", c->sample_rate, 0);
-	av_opt_set_sample_fmt(ost->swr_ctx, "out_sample_fmt", c->sample_fmt, 0);
+	av_opt_set_int(ost->swr_ctx, "in_channel_count", encCtx->channels, 0);
+	av_opt_set_int(ost->swr_ctx, "in_sample_rate", decCtx->sample_rate, 0);
+	av_opt_set_sample_fmt(ost->swr_ctx, "in_sample_fmt", decCtx->sample_fmt, 0);
+	av_opt_set_int(ost->swr_ctx, "out_channel_count", encCtx->channels, 0);
+	av_opt_set_int(ost->swr_ctx, "out_sample_rate", encCtx->sample_rate, 0);
+	av_opt_set_sample_fmt(ost->swr_ctx, "out_sample_fmt", encCtx->sample_fmt, 0);
 	/* initialize the resampling context */
 	if ((ret = swr_init(ost->swr_ctx)) < 0) {
 		fprintf(stderr, "Failed to initialize the resampling context\n");

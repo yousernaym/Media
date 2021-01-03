@@ -89,25 +89,28 @@
   */
  static void audio_decode_example(const char* outfilename, const char* filename)
  {
-	     AVCodec* codec;
-	     AVCodecContext * c = NULL;
+	     AVCodec* decCodec;
+	     AVCodecContext * decCodecCtx = NULL;
 	     int out_size, len;
 	     FILE * f, * outfile;
 	     uint8_t * outbuf;
 	     uint8_t inbuf[AUDIO_INBUF_SIZE + FF_INPUT_BUFFER_PADDING_SIZE];
 	     AVPacket avpkt;
-	
+		 AVFormatContext *ifmt_ctx;
 		 av_init_packet(&avpkt);
-	
-		     printf("Audio decoding\n");
-	
-		     /* find the mpeg audio decoder */
-		     codec = avcodec_find_decoder(CODEC_ID_MP2);
-	     if (!codec) {
-		         fprintf(stderr, "codec not found\n");
-		         exit(1);
 		
-	}
+		 if ((ret = avformat_open_input(&ifmt_ctx, filename, NULL, NULL)) < 0) {
+			 av_log(NULL, AV_LOG_ERROR, "Cannot open input file\n");
+			 return ret;
+		 }
+
+		 /* find the mpeg audio decoder */
+		 codec = avcodec_find_decoder(ifmt_ctx.);
+	     if (!codec)
+		{
+			fprintf(stderr, "codec not found\n");
+		    exit(1);
+		 }
 	
 		     c = avcodec_alloc_context();
 	
@@ -125,31 +128,31 @@
 		         fprintf(stderr, "could not open %s\n", filename);
 		         exit(1);
 		
-	}
+		}
 	     outfile = fopen(outfilename, "wb");
 	     if (!outfile) {
 		         av_free(c);
 		         exit(1);
-		
-	}
+		 }
 	
 		     /* decode until eof */
 		      avpkt.data = inbuf;
 			avpkt.size = fread(inbuf, 1, AUDIO_INBUF_SIZE, f);
 	
-		     while (avpkt.size > 0) {
+		     while (avpkt.size > 0) 
+			 {
 		         out_size = AVCODEC_MAX_AUDIO_FRAME_SIZE;
 		         len = avcodec_decode_audio3(c, (short*)outbuf, &out_size, &avpkt);
-		         if (len < 0) {
-			             fprintf(stderr, "Error while decoding\n");
-			             exit(1);
-			
-		}
-		         if (out_size > 0) {
-			             /* if a frame has been decoded, output it */
-				00172             fwrite(outbuf, 1, out_size, outfile);
-			
-		}
+		         if (len < 0) 
+				 {
+					fprintf(stderr, "Error while decoding\n");
+					exit(1);
+				 }
+		         if (out_size > 0) 
+				 {
+					/* if a frame has been decoded, output it */
+				    fwrite(outbuf, 1, out_size, outfile);
+		         }
 		         avpkt.size -= len;
 		         avpkt.data += len;
 		         if (avpkt.size < AUDIO_REFILL_THRESH) {
