@@ -15,7 +15,7 @@ extern "C"
 	#include <libavutil/mathematics.h>
 	#include <libavformat/avformat.h>
 	#include <libavutil/opt.h>
-	#include <libswresample/swresample.h>*/
+	#include <libswresample/swresample.h>
 	#include <libavutil/avassert.h>
 }
 

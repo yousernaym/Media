@@ -77,7 +77,7 @@ static void add_stream(OutputStream* ost, AVFormatContext* oc,
 	case AVMEDIA_TYPE_AUDIO:
 		c->sample_fmt = (*codec)->sample_fmts ?
 			(*codec)->sample_fmts[0] : AV_SAMPLE_FMT_FLTP;
-		//c->bit_rate = 320000;
+		//c->bit_rate = 384000;
 		c->sample_rate = 48000;
 		/*if ((*codec)->supported_samplerates) {
 			c->sample_rate = (*codec)->supported_samplerates[0];
@@ -175,7 +175,6 @@ static void open_audio(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, A
 	c = ost->enc;
 	/* open it */
 	av_dict_copy(&opt, opt_arg, 0);
-	av_dict_set(&opt, "crf", "1", 0);
 	ret = avcodec_open2(c, codec, &opt);
 	av_dict_free(&opt);
 	if (ret < 0) {
@@ -262,7 +261,7 @@ static int write_audio_frame(AVFormatContext* oc, OutputStream* ost)
 	if (frame) {
 		/* convert samples from native format to destination codec format, using the resampler */
 			/* compute destination number of samples */
-		dst_nb_samples = av_rescale_rnd(swr_get_delay(ost->swr_ctx, c->sample_rate) + frame->nb_samples,
+		dst_nb_samples = (int)av_rescale_rnd(swr_get_delay(ost->swr_ctx, c->sample_rate) + frame->nb_samples,
 			c->sample_rate, c->sample_rate, AV_ROUND_UP);
 		av_assert0(dst_nb_samples == frame->nb_samples);
 		/* when we pass a frame to the encoder, it may keep a reference to it
@@ -328,7 +327,7 @@ static void open_video(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, A
 	AVDictionary* opt = NULL;
 	av_dict_copy(&opt, opt_arg, 0);
 	av_dict_set(&opt, "preset", "ultrafast", 0);
-	av_dict_set(&opt, "crf", "0", 0);
+	av_dict_set(&opt, "crf", "1", 0);
 	/* open the codec */
 	ret = avcodec_open2(c, codec, &opt);
 	av_dict_free(&opt);
@@ -397,9 +396,9 @@ static AVFrame* get_video_frame(OutputStream* ost, const uint8_t* pixels)
 	// The AVFrame data will be stored as RGBRGBRGB... row-wise,
 	// from left to right and from top to bottom.
 	AVFrame* rgbpic = ost->src_frame;
-	for (unsigned int y = 0; y < c->height; y++)
+	for (int y = 0; y < c->height; y++)
 	{
-		for (unsigned int x = 0; x < c->width; x++)
+		for (int x = 0; x < c->width; x++)
 		{
 			// rgbpic->linesize[0] is equal to width.
 			rgbpic->data[0][y * rgbpic->linesize[0] + 3 * x + 0] = pixels[y * 4 * c->width + 4 * x + 2];
@@ -433,7 +432,7 @@ static int write_video_frame(AVFormatContext* oc, OutputStream* ost, const uint8
 	/* encode the image */
 	ret = avcodec_encode_video2(c, &pkt, frame, &got_packet);
 	if (ret < 0) {
-		fprintf(stderr, "Error encoding video frame: %s\n", ret);
+		fprintf(stderr, "Error encoding video frame: %d\n", ret);
 		exit(1);
 	}
 	if (got_packet) {
@@ -443,7 +442,7 @@ static int write_video_frame(AVFormatContext* oc, OutputStream* ost, const uint8
 		ret = 0;
 	}
 	if (ret < 0) {
-		fprintf(stderr, "Error while writing video frame: %s\n", ret);
+		fprintf(stderr, "Error while writing video frame: %d\n", ret);
 		exit(1);
 	}
 	return (frame || got_packet) ? 0 : 1;
@@ -477,6 +476,7 @@ BOOL beginVideoEnc(char *outputFile, VideoFormat vidFmt, BOOL  _bVideo)
 	have_video = 1;
 	encode_video = 1;
 	add_stream(&audio_st, oc, &audio_codec, AV_CODEC_ID_PCM_S24LE, vidFmt);
+	//add_stream(&audio_st, oc, &audio_codec, AV_CODEC_ID_AAC, vidFmt);
 	have_audio = 1;
 	encode_audio = 1;
 
@@ -491,16 +491,16 @@ BOOL beginVideoEnc(char *outputFile, VideoFormat vidFmt, BOOL  _bVideo)
 	if (!(fmt->flags & AVFMT_NOFILE)) {
 		ret = avio_open(&oc->pb, outputFile, AVIO_FLAG_WRITE);
 		if (ret < 0) {
-			fprintf(stderr, "Could not open '%s': %s\n", outputFile,
+			fprintf(stderr, "Could not open '%s': %d\n", outputFile,
 				ret);
 			return FALSE;
 		}
 	}
 	/* Write the stream header, if any. */
 	ret = avformat_write_header(oc, &opt);
-	if (ret < 0) {
-		fprintf(stderr, "Error occurred when opening output file: %s\n",
-			ret);
+	if (ret < 0) 
+	{
+		fprintf(stderr, "Error occurred when opening output file: %d\n", ret);
 		return FALSE;
 	}
 	return TRUE;
