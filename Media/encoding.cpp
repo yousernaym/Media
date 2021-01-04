@@ -506,45 +506,48 @@ BOOL beginVideoEnc(char *outputFile, char *audioFile, VideoFormat vidFmt, BOOL  
 	AVDictionary* opt = NULL;
 	BOOL ret;
 	/* allocate the output media context */
-	avformat_alloc_output_context2(&oc, NULL, NULL, "dummy.mov");
+	/*avformat_alloc_output_context2(&oc, NULL, NULL, "dummy.mov");
 	if (!oc)
-		return FALSE;
-	fmt = oc->oformat;
+		return FALSE;*/
+	//fmt = oc->oformat;
 	/* Add the audio and video streams using the default format codecs
 	 * and initialize the codecs. */
-	add_stream(&video_st, oc, &video_codec, AV_CODEC_ID_H264, vidFmt);
+	//add_stream(&video_st, oc, &video_codec, AV_CODEC_ID_H264, vidFmt);
 	have_video = 1;
 	encode_video = 1;
 	//add_stream(&audio_st, oc, &audio_codec, AV_CODEC_ID_PCM_S24LE, vidFmt);
 	//add_stream(&audio_st, oc, &audio_codec, AV_CODEC_ID_AAC, vidFmt);
-	if (initAudio(audioFile, oc))
+	if (initAudio(audioFile, &oc))
 		return FALSE;
 	have_audio = 1;
 	encode_audio = 1;
-
-	/* Now that all the parameters are set, we can open the audio and
+	
+	fmt = oc->oformat;
+	add_stream(&video_st, oc, &video_codec, AV_CODEC_ID_H264, vidFmt);
+	
+		/* Now that all the parameters are set, we can open the audio and
 	 * video codecs and allocate the necessary encode buffers. */
 	if (have_video)
 		open_video(oc, video_codec, &video_st, opt);
 	//if (have_audio)
 		//open_audio(oc, audio_codec, &audio_st, opt);
-	av_dump_format(oc, 0, outputFile, 1);
+	//av_dump_format(oc, 0, outputFile, 1);
 	/* open the output file, if needed */
-	if (!(fmt->flags & AVFMT_NOFILE)) {
+	/*if (!(fmt->flags & AVFMT_NOFILE)) {
 		ret = avio_open(&oc->pb, outputFile, AVIO_FLAG_WRITE);
 		if (ret < 0) {
 			fprintf(stderr, "Could not open '%s': %d\n", outputFile,
 				ret);
 			return FALSE;
 		}
-	}
+	}*/
 	/* Write the stream header, if any. */
-	ret = avformat_write_header(oc, &opt);
+	/*ret = avformat_write_header(oc, &opt);
 	if (ret < 0) 
 	{
 		fprintf(stderr, "Error occurred when opening output file: %d\n", ret);
 		return FALSE;
-	}
+	}*/
 	return TRUE;
 }
 
@@ -567,6 +570,8 @@ BOOL writeFrame(const DWORD *sourceVideoFrame, LONGLONG rtStart, LONGLONG &rtDur
 		//encode_audio = !write_audio_frame(oc, &audio_st);
 		encode_audio = !writeAudioFrame(oc);
 	}
+	
+	//encode_audio = !writeAudioFrame(oc);
 	return encode_audio | encode_video;
 }
 //
@@ -645,7 +650,8 @@ void endVideoEnc()
 	/* Close each codec. */
 	if (have_video)
 		close_stream(oc, &video_st);
-	audioCleanup();
+	audioCleanup(&oc);
+	return;
 	//if (have_audio)
 		//close_stream(oc, &audio_st);
 	if (!(fmt->flags & AVFMT_NOFILE))
