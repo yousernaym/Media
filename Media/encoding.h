@@ -23,7 +23,7 @@ HRESULT writeSamples(IMFSample *pSample, LONGLONG rtStart, LONGLONG rtDuration, 
 
 extern "C"
 {
-	__declspec(dllexport) BOOL beginVideoEnc(char *outputFile, VideoFormat vidFmt, BOOL  _bVideo);
+	__declspec(dllexport) BOOL beginVideoEnc(char *outputFile, char *audioFile, VideoFormat vidFmt, BOOL  _bVideo);
 	__declspec(dllexport) BOOL writeFrameCube(DWORD *destVideoFrame, LONGLONG rtStart, LONGLONG &rtDuration, double audioOffset, const DWORD *cmFace0, const DWORD *cmFace1, const DWORD *cmFace2, const DWORD *cmFace3, const DWORD *cmFace4, const DWORD *cmFace5, int cmFaceSide, int videoFrameX, int videoFrameY);
 	__declspec(dllexport) BOOL writeFrame(const DWORD *videoFrameBuffer, LONGLONG rtStart, LONGLONG &rtDuration, double audioOffset);
 	__declspec(dllexport) void endVideoEnc();

@@ -4,6 +4,7 @@
 #define _USE_MATH_DEFINES
 #include <math.h>
 #include "movie.h"
+#include "audioTranscoding.h"
 
 #define STREAM_PIX_FMT    AV_PIX_FMT_YUV420P /* default pix_fmt */
 #define SCALE_FLAGS SWS_BICUBIC
@@ -36,40 +37,41 @@ AVCodec* audio_codec, * video_codec;
 int have_video = 0, have_audio = 0;
 int encode_video = 0, encode_audio = 0;
 
-static int open_audio_file(const char* filename)
-{
-	int ret;
-	unsigned int i;
-	audioInputFmtCtx = NULL;
-	if ((ret = avformat_open_input(&audioInputFmtCtx, filename, NULL, NULL)) < 0)
-	{
-		av_log(NULL, AV_LOG_ERROR, "Cannot open input file\n");
-		return ret;
-	}
-	if ((ret = avformat_find_stream_info(audioInputFmtCtx, NULL)) < 0) 
-	{
-		av_log(NULL, AV_LOG_ERROR, "Cannot find stream information\n");
-		return ret;
-	}
-	AVStream* stream;
-	AVCodecContext* codec_ctx;
-	stream = audioInputFmtCtx->streams[0];
-	//codec_ctx = stream->codec;
-	codec_ctx = avcodec_alloc_context3();
-
-	if (codec_ctx->codec_type == AVMEDIA_TYPE_AUDIO) 
-	{
-		/* Open decoder */
-		ret = avcodec_open2(codec_ctx, avcodec_find_decoder(codec_ctx->codec_id), NULL);
-		if (ret < 0) 
-		{
-			av_log(NULL, AV_LOG_ERROR, "Failed to open decoder for stream #%u\n", i);
-			return ret;
-		}
-	}
-	av_dump_format(audioInputFmtCtx, 0, filename, 0);
-	return 0;
-}
+//static int open_audio_file(const char* filename)
+//{
+//	int ret;
+//	unsigned int i;
+//	audioInputFmtCtx = NULL;
+//	if ((ret = avformat_open_input(&audioInputFmtCtx, filename, NULL, NULL)) < 0)
+//	{
+//		av_log(NULL, AV_LOG_ERROR, "Cannot open input file\n");
+//		return ret;
+//	}
+//	if ((ret = avformat_find_stream_info(audioInputFmtCtx, NULL)) < 0) 
+//	{
+//		av_log(NULL, AV_LOG_ERROR, "Cannot find stream information\n");
+//		return ret;
+//	}
+//	AVStream* stream;
+//	AVCodecContext* codec_ctx;
+//	stream = audioInputFmtCtx->streams[0];
+//	//codec_ctx = stream->codec;
+//	AVCodec* codec = avcodec_find_encoder(audioInputFmtCtx->audio_codec_id);
+//	codec_ctx = avcodec_alloc_context3(codec);
+//
+//	if (codec_ctx->codec_type == AVMEDIA_TYPE_AUDIO) 
+//	{
+//		/* Open decoder */
+//		ret = avcodec_open2(codec_ctx, avcodec_find_decoder(codec_ctx->codec_id), NULL);
+//		if (ret < 0) 
+//		{
+//			av_log(NULL, AV_LOG_ERROR, "Failed to open decoder for stream #%u\n", i);
+//			return ret;
+//		}
+//	}
+//	av_dump_format(audioInputFmtCtx, 0, filename, 0);
+//	return 0;
+//}
 
 static int write_frame(AVFormatContext* fmt_ctx, const AVRational* time_base, AVStream* st, AVPacket* pkt)
 {
@@ -82,22 +84,22 @@ static int write_frame(AVFormatContext* fmt_ctx, const AVRational* time_base, AV
 }
 
 /* Add an output stream. */
-static void add_stream(OutputStream* ost, AVFormatContext* oc,
-	AVCodec** codec,
-	enum AVCodecID codec_id,
-	const VideoFormat &vidFmt)
+static void add_stream(OutputStream* ost, AVFormatContext* oc, AVCodec** codec, enum AVCodecID codec_id, const VideoFormat &vidFmt)
 {
 	AVCodecContext* c;
 	int i;
 	/* find the encoder */
 	*codec = avcodec_find_encoder(codec_id);
-	if (!(*codec)) {
+	if (!(*codec)) 
+	{
 		fprintf(stderr, "Could not find encoder for '%s'\n",
 			avcodec_get_name(codec_id));
 		exit(1);
 	}
+
 	ost->st = avformat_new_stream(oc, NULL);
-	if (!ost->st) {
+	if (!ost->st) 
+	{
 		fprintf(stderr, "Could not allocate stream\n");
 		exit(1);
 	}
@@ -294,11 +296,11 @@ static int write_audio_frame(AVFormatContext* oc, OutputStream* ost)
 	av_init_packet(&pkt);
 	c = ost->enc;
 	frame = get_audio_frame(ost);
-	if (frame) {
+	if (frame) 
+	{
 		/* convert samples from native format to destination codec format, using the resampler */
-			/* compute destination number of samples */
-		dst_nb_samples = (int)av_rescale_rnd(swr_get_delay(ost->swr_ctx, c->sample_rate) + frame->nb_samples,
-			c->sample_rate, c->sample_rate, AV_ROUND_UP);
+		/* compute destination number of samples */
+		dst_nb_samples = (int)av_rescale_rnd(swr_get_delay(ost->swr_ctx, c->sample_rate) + frame->nb_samples, c->sample_rate, c->sample_rate, AV_ROUND_UP);
 		av_assert0(dst_nb_samples == frame->nb_samples);
 		/* when we pass a frame to the encoder, it may keep a reference to it
 		 * internally;
@@ -308,10 +310,9 @@ static int write_audio_frame(AVFormatContext* oc, OutputStream* ost)
 		if (ret < 0)
 			exit(1);
 		/* convert to destination format */
-		ret = swr_convert(ost->swr_ctx,
-			ost->frame->data, dst_nb_samples,
-			(const uint8_t**)frame->data, frame->nb_samples);
-		if (ret < 0) {
+		ret = swr_convert(ost->swr_ctx, ost->frame->data, dst_nb_samples, (const uint8_t**)frame->data, frame->nb_samples);
+		if (ret < 0) 
+		{
 			fprintf(stderr, "Error while converting\n");
 			exit(1);
 		}
@@ -320,13 +321,16 @@ static int write_audio_frame(AVFormatContext* oc, OutputStream* ost)
 		ost->samples_count += dst_nb_samples;
 	}
 	ret = avcodec_encode_audio2(c, &pkt, frame, &got_packet);
-	if (ret < 0) {
+	if (ret < 0) 
+	{
 		fprintf(stderr, "Error encoding audio frame: %d\n", ret);
 		exit(1);
 	}
-	if (got_packet) {
+	if (got_packet) 
+	{
 		ret = write_frame(oc, &c->time_base, ost->st, &pkt);
-		if (ret < 0) {
+		if (ret < 0) 
+		{
 			fprintf(stderr, "Error while writing audio frame: %d\n",
 				ret);
 			exit(1);
@@ -495,7 +499,7 @@ static void close_stream(AVFormatContext* oc, OutputStream* ost)
 }
 
 
-BOOL beginVideoEnc(char *outputFile, VideoFormat vidFmt, BOOL  _bVideo)
+BOOL beginVideoEnc(char *outputFile, char *audioFile, VideoFormat vidFmt, BOOL  _bVideo)
 {
 	/*writer = new MovieWriter(outputFile, vidFmt.width, vidFmt.height);
 	return TRUE;*/
@@ -511,8 +515,10 @@ BOOL beginVideoEnc(char *outputFile, VideoFormat vidFmt, BOOL  _bVideo)
 	add_stream(&video_st, oc, &video_codec, AV_CODEC_ID_H264, vidFmt);
 	have_video = 1;
 	encode_video = 1;
-	add_stream(&audio_st, oc, &audio_codec, AV_CODEC_ID_PCM_S24LE, vidFmt);
+	//add_stream(&audio_st, oc, &audio_codec, AV_CODEC_ID_PCM_S24LE, vidFmt);
 	//add_stream(&audio_st, oc, &audio_codec, AV_CODEC_ID_AAC, vidFmt);
+	if (initAudio(audioFile, oc))
+		return FALSE;
 	have_audio = 1;
 	encode_audio = 1;
 
@@ -520,8 +526,8 @@ BOOL beginVideoEnc(char *outputFile, VideoFormat vidFmt, BOOL  _bVideo)
 	 * video codecs and allocate the necessary encode buffers. */
 	if (have_video)
 		open_video(oc, video_codec, &video_st, opt);
-	if (have_audio)
-		open_audio(oc, audio_codec, &audio_st, opt);
+	//if (have_audio)
+		//open_audio(oc, audio_codec, &audio_st, opt);
 	av_dump_format(oc, 0, outputFile, 1);
 	/* open the output file, if needed */
 	if (!(fmt->flags & AVFMT_NOFILE)) {
@@ -550,12 +556,16 @@ BOOL writeFrame(const DWORD *sourceVideoFrame, LONGLONG rtStart, LONGLONG &rtDur
 		return TRUE;
 	}
 	if (encode_video &&
+		/*(!encode_audio || av_compare_ts(video_st.next_pts, video_st.enc->time_base,
+			audio_st.next_pts, audio_st.enc->time_base) <= 0)) {*/
 		(!encode_audio || av_compare_ts(video_st.next_pts, video_st.enc->time_base,
-			audio_st.next_pts, audio_st.enc->time_base) <= 0)) {
+		getAudioPts(), getAudioTimeBase()) <= 0)) 
+	{
 		encode_video = !write_video_frame(oc, &video_st, (uint8_t*)sourceVideoFrame);
 	}
 	else {
-		encode_audio = !write_audio_frame(oc, &audio_st);
+		//encode_audio = !write_audio_frame(oc, &audio_st);
+		encode_audio = !writeAudioFrame(oc);
 	}
 	return encode_audio | encode_video;
 }
@@ -635,8 +645,9 @@ void endVideoEnc()
 	/* Close each codec. */
 	if (have_video)
 		close_stream(oc, &video_st);
-	if (have_audio)
-		close_stream(oc, &audio_st);
+	audioCleanup();
+	//if (have_audio)
+		//close_stream(oc, &audio_st);
 	if (!(fmt->flags & AVFMT_NOFILE))
 		/* Close the output file. */
 		avio_closep(&oc->pb);

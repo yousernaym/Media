@@ -30,6 +30,9 @@
     <ClCompile Include="mux.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="audioTranscoding.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="encoding.h">
@@ -42,6 +45,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="movie.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="audioTranscoding.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

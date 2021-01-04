@@ -367,12 +367,13 @@ int main(int argc, char** argv)
 			break;
 		stream_index = packet.stream_index;
 		type = ifmt_ctx->streams[packet.stream_index]->codec->codec_type;
-		av_log(NULL, AV_LOG_DEBUG, "Demuxer gave frame of stream_index %u\n",
-			stream_index);
-		if (filter_ctx[stream_index].filter_graph) {
+		av_log(NULL, AV_LOG_DEBUG, "Demuxer gave frame of stream_index %u\n",stream_index);
+		if (filter_ctx[stream_index].filter_graph) 
+		{
 			av_log(NULL, AV_LOG_DEBUG, "Going to reencode&filter the frame\n");
 			frame = av_frame_alloc();
-			if (!frame) {
+			if (!frame) 
+			{
 				ret = AVERROR(ENOMEM);
 				break;
 			}
@@ -393,7 +394,8 @@ int main(int argc, char** argv)
 				av_log(NULL, AV_LOG_ERROR, "Decoding failed\n");
 				break;
 			}
-			if (got_frame) {
+			if (got_frame)
+			{
 				frame->pts = av_frame_get_best_effort_timestamp(frame);
 				ret = filter_encode_write_frame(frame, stream_index);
 				av_frame_free(&frame);
