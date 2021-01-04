@@ -246,8 +246,8 @@ static void open_audio(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, A
 	}
 	/* set options */
 	av_opt_set_int(ost->swr_ctx, "in_channel_count", encCtx->channels, 0);
-	av_opt_set_int(ost->swr_ctx, "in_sample_rate", decCtx->sample_rate, 0);
-	av_opt_set_sample_fmt(ost->swr_ctx, "in_sample_fmt", decCtx->sample_fmt, 0);
+	av_opt_set_int(ost->swr_ctx, "in_sample_rate", encCtx->sample_rate, 0);
+	av_opt_set_sample_fmt(ost->swr_ctx, "in_sample_fmt", encCtx->sample_fmt, 0);
 	av_opt_set_int(ost->swr_ctx, "out_channel_count", encCtx->channels, 0);
 	av_opt_set_int(ost->swr_ctx, "out_sample_rate", encCtx->sample_rate, 0);
 	av_opt_set_sample_fmt(ost->swr_ctx, "out_sample_fmt", encCtx->sample_fmt, 0);
@@ -506,48 +506,45 @@ BOOL beginVideoEnc(char *outputFile, char *audioFile, VideoFormat vidFmt, BOOL  
 	AVDictionary* opt = NULL;
 	BOOL ret;
 	/* allocate the output media context */
-	/*avformat_alloc_output_context2(&oc, NULL, NULL, "dummy.mov");
+	avformat_alloc_output_context2(&oc, NULL, NULL, "dummy.mov");
 	if (!oc)
-		return FALSE;*/
-	//fmt = oc->oformat;
+		return FALSE;
+	fmt = oc->oformat;
 	/* Add the audio and video streams using the default format codecs
 	 * and initialize the codecs. */
-	//add_stream(&video_st, oc, &video_codec, AV_CODEC_ID_H264, vidFmt);
 	have_video = 1;
 	encode_video = 1;
-	//add_stream(&audio_st, oc, &audio_codec, AV_CODEC_ID_PCM_S24LE, vidFmt);
-	//add_stream(&audio_st, oc, &audio_codec, AV_CODEC_ID_AAC, vidFmt);
-	if (initAudio(audioFile, &oc))
-		return FALSE;
-	have_audio = 1;
-	encode_audio = 1;
-	
 	fmt = oc->oformat;
 	add_stream(&video_st, oc, &video_codec, AV_CODEC_ID_H264, vidFmt);
-	
-		/* Now that all the parameters are set, we can open the audio and
+	//add_stream(&audio_st, oc, &audio_codec, AV_CODEC_ID_PCM_S24LE, vidFmt);
+	//add_stream(&audio_st, oc, &audio_codec, AV_CODEC_ID_AAC, vidFmt);
+	/*if (initAudio(audioFile, oc))
+		return FALSE;*/
+	have_audio = 1;
+	encode_audio = 1;
+	/* Now that all the parameters are set, we can open the audio and
 	 * video codecs and allocate the necessary encode buffers. */
 	if (have_video)
 		open_video(oc, video_codec, &video_st, opt);
 	//if (have_audio)
 		//open_audio(oc, audio_codec, &audio_st, opt);
-	//av_dump_format(oc, 0, outputFile, 1);
+	av_dump_format(oc, 0, outputFile, 1);
 	/* open the output file, if needed */
-	/*if (!(fmt->flags & AVFMT_NOFILE)) {
+	if (!(fmt->flags & AVFMT_NOFILE)) {
 		ret = avio_open(&oc->pb, outputFile, AVIO_FLAG_WRITE);
 		if (ret < 0) {
 			fprintf(stderr, "Could not open '%s': %d\n", outputFile,
 				ret);
 			return FALSE;
 		}
-	}*/
+	}
 	/* Write the stream header, if any. */
-	/*ret = avformat_write_header(oc, &opt);
+	ret = avformat_write_header(oc, &opt);
 	if (ret < 0) 
 	{
 		fprintf(stderr, "Error occurred when opening output file: %d\n", ret);
 		return FALSE;
-	}*/
+	}
 	return TRUE;
 }
 
@@ -558,19 +555,21 @@ BOOL writeFrame(const DWORD *sourceVideoFrame, LONGLONG rtStart, LONGLONG &rtDur
 		writer->addFrame((uint8_t*)sourceVideoFrame);
 		return TRUE;
 	}
-	if (encode_video &&
-		/*(!encode_audio || av_compare_ts(video_st.next_pts, video_st.enc->time_base,
-			audio_st.next_pts, audio_st.enc->time_base) <= 0)) {*/
-		(!encode_audio || av_compare_ts(video_st.next_pts, video_st.enc->time_base,
-		getAudioPts(), getAudioTimeBase()) <= 0)) 
-	{
-		encode_video = !write_video_frame(oc, &video_st, (uint8_t*)sourceVideoFrame);
-	}
-	else {
-		//encode_audio = !write_audio_frame(oc, &audio_st);
-		encode_audio = !writeAudioFrame(oc);
-	}
-	
+	//if (encode_video &&
+	//	(!encode_audio || av_compare_ts(video_st.next_pts, video_st.enc->time_base,
+	//		audio_st.next_pts, audio_st.enc->time_base) <= 0)) 
+	//{
+	///*	(!encode_audio || av_compare_ts(video_st.next_pts, video_st.enc->time_base,
+	//	getAudioPts(), getAudioTimeBase()) <= 0)) 
+	//{*/
+	//	encode_video = !write_video_frame(oc, &video_st, (uint8_t*)sourceVideoFrame);
+	//}
+	//else {
+	//	encode_audio = !write_audio_frame(oc, &audio_st);
+	//	//encode_audio = !writeAudioFrame(oc);
+	//}
+
+	encode_video = !write_video_frame(oc, &video_st, (uint8_t*)sourceVideoFrame);
 	//encode_audio = !writeAudioFrame(oc);
 	return encode_audio | encode_video;
 }

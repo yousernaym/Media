@@ -87,9 +87,9 @@ static int open_input_file(const char* filename, AVFormatContext** input_format_
   * Also set some basic encoder parameters.
   * Some of these parameters are based on the input file's parameters.
   */
-static int open_output_file(AVCodecContext* input_codec_context, AVFormatContext** output_format_context, AVCodecContext** output_codec_context)
+static int open_output_file(AVCodecContext* input_codec_context, AVFormatContext* output_format_context, AVCodecContext** output_codec_context)
 {
-	const char* filename = "test.mp4";
+	const char* filename = "test.mov";
 	AVCodecContext* avctx = NULL;
 	AVIOContext* output_io_context = NULL;
 	AVStream* stream = NULL;
@@ -97,30 +97,30 @@ static int open_output_file(AVCodecContext* input_codec_context, AVFormatContext
 	int error = AVERROR_EXIT;
 
 	/** Open the output file to write to it. */
-	if ((error = avio_open(&output_io_context, filename, AVIO_FLAG_WRITE)) < 0)
+	/*if ((error = avio_open(&output_io_context, filename, AVIO_FLAG_WRITE)) < 0)
 	{
 		fprintf(stderr, "Could not open output file '%s' (error '%d')\n", filename, error);
 		return error;
-	}
+	}*/
 
 	/** Create a new format context for the output container format. */
-	if (!(*output_format_context = avformat_alloc_context()))
+	/*if (!(*output_format_context = avformat_alloc_context()))
 	{
 		fprintf(stderr, "Could not allocate output format context\n");
 		return AVERROR(ENOMEM);
-	}
+	}*/
 
 	/** Associate the output file (pointer) with the container format context. */
-	(*output_format_context)->pb = output_io_context;
+	//(*output_format_context)->pb = output_io_context;
 
 	/** Guess the desired container format based on the file extension. */
-	if (!((*output_format_context)->oformat = av_guess_format(NULL, filename, NULL)))
+	/*if (!((*output_format_context)->oformat = av_guess_format(NULL, filename, NULL)))
 	{
 		fprintf(stderr, "Could not find output file format\n");
 		return error;
-	}
+	}*/
 
-	av_strlcpy((*output_format_context)->filename, filename, sizeof((*output_format_context)->filename));
+	//av_strlcpy((output_format_context)->filename, filename, sizeof((output_format_context)->filename));
 
 	/** Find the encoder to be used by its name. */
 	if (!(output_codec = avcodec_find_encoder(AV_CODEC_ID_AAC)))
@@ -131,7 +131,7 @@ static int open_output_file(AVCodecContext* input_codec_context, AVFormatContext
 	output_frame_size = 1600;
 
 	/** Create a new audio stream in the output file container. */
-	if (!(stream = avformat_new_stream(*output_format_context, NULL)))
+	if (!(stream = avformat_new_stream(output_format_context, NULL)))
 	{
 		fprintf(stderr, "Could not create new stream\n");
 		error = AVERROR(ENOMEM);
@@ -157,7 +157,7 @@ static int open_output_file(AVCodecContext* input_codec_context, AVFormatContext
 	avctx->bit_rate = OUTPUT_BIT_RATE;
 
 	/** Allow the use of the experimental AAC encoder */
-	// avctx->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
+	 avctx->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
 
 	/** Set the sample rate for the container. */
 	stream->time_base.den = input_codec_context->sample_rate;
@@ -167,7 +167,7 @@ static int open_output_file(AVCodecContext* input_codec_context, AVFormatContext
 	 * Some container formats (like MP4) require global headers to be present
 	 * Mark the encoder so that it behaves accordingly.
 	 */
-	if ((*output_format_context)->oformat->flags & AVFMT_GLOBALHEADER)
+	if ((output_format_context)->oformat->flags & AVFMT_GLOBALHEADER)
 		avctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 
 	/** Open the encoder for the audio stream to use it later. */
@@ -609,7 +609,7 @@ static int encode_audio_frame(AVFrame* frame, AVFormatContext* output_format_con
  //AVFormatContext* output_format_context;
 
  /** Convert an audio file to an AAC file in an MP4 container. */
- int initAudio(const char* audioFilename, AVFormatContext** output_format_context)
+ int initAudio(const char* audioFilename, AVFormatContext* output_format_context)
  {
 	 finished = 0;
 	 pts = 0;
@@ -627,8 +627,8 @@ static int encode_audio_frame(AVFrame* frame, AVFormatContext* output_format_con
 	 if (init_fifo(&fifo, output_codec_context))
 		 return error;
 	 /** Write the header of the output file container. */
-	 if (write_output_file_header(*output_format_context))
-		 return error;
+	 //if (write_output_file_header(*output_format_context))
+		// return error;
 
 	 return 0;
 }
@@ -706,10 +706,9 @@ static int encode_audio_frame(AVFrame* frame, AVFormatContext* output_format_con
  {
 	 AVFormatContext* oc = *output_format_context;
 	 /** Write the trailer of the output file container. */
-	 if (write_output_file_trailer(oc))
-		 return;
-	 oc = 0;
-	  if (fifo)
+	 //if (write_output_file_trailer(oc))
+		// return;
+	 if (fifo)
 		 av_audio_fifo_free(fifo);
 	 swr_free(&resample_context);
 	 if (output_codec_context)

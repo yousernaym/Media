@@ -13,6 +13,6 @@ extern "C"
 }
 void audioCleanup(AVFormatContext** output_format_context);
 int writeAudioFrame(AVFormatContext* output_format_context);
-int initAudio(const char* audioFilename, AVFormatContext** output_format_context);
+int initAudio(const char* audioFilename, AVFormatContext* output_format_context);
 AVRational getAudioTimeBase();
 int64_t getAudioPts();
