@@ -27,7 +27,7 @@ AVOutputFormat* fmt;
 AVFormatContext* output_format_context = NULL;
 AVFormatContext* audio_input_format_context = NULL;
 AVCodec* audio_codec = NULL, * video_codec = NULL;
-int encode_video = 1, encode_audio = 1;
+int encode_video, encode_audio;
 
 static int write_frame(AVFormatContext* fmt_ctx, const AVRational* time_base, AVStream* st, AVPacket* pkt)
 {
@@ -152,16 +152,18 @@ static int write_audio_frame(AVFormatContext* oc, OutputStream* ost)
 	if ((ret = av_read_frame(audio_input_format_context, &pkt)) < 0)
 	{
 		if (ret == AVERROR_EOF)
-			return 0;
+			return ret;
 		else
 		{
 			fprintf(stderr, "Could not read frame (error '%d')\n", ret);
 			return ret;
 		}
 	}
+	
 	ost->pts = pkt.pts;
-	pkt.stream_index = ost->st->index;
-	ret = av_interleaved_write_frame(oc, &pkt);
+	ret = write_frame(output_format_context, &ost->st->time_base, ost->st, &pkt);
+	//pkt.stream_index = ost->st->index;
+	//ret = av_interleaved_write_frame(oc, &pkt);
 	if (ret < 0) 
 	{
 		fprintf(stderr, "Error while writing audio frame: %d\n", ret);
@@ -304,6 +306,7 @@ static void close_stream(OutputStream* ost)
 
 BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, BOOL  _bVideo)
 {
+	encode_audio = encode_video = true;
 	AVDictionary* opt = NULL;
 	BOOL ret;
 	/* allocate the output media context */
@@ -366,14 +369,10 @@ BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, BOOL  
 
 BOOL writeFrame(const DWORD *sourceVideoFrame, LONGLONG rtStart, LONGLONG &rtDuration, double audioOffset)
 {
-	if (encode_video &&
-		(!encode_audio || av_compare_ts(video_st.pts, video_st.enc->time_base,
-			audio_st.pts, audio_st.enc->time_base) <= 0)) {
+	if (encode_video)
 		encode_video = !write_video_frame(output_format_context, &video_st, (uint8_t*)sourceVideoFrame);
-	}
-	else {
+	while (encode_audio && (!encode_video || av_compare_ts(video_st.pts, video_st.enc->time_base, audio_st.pts, audio_st.enc->time_base)) > 0)
 		encode_audio = !write_audio_frame(output_format_context, &audio_st);
-	}
 	return encode_audio | encode_video;
 }
 
