@@ -43,10 +43,17 @@ static int open_input_file(const char* filename)
 	}
 
 	/** Find a decoder for the audio stream. */
+<<<<<<< Updated upstream
+	if (!(input_codec = avcodec_find_decoder((*input_format_context)->streams[0]->codecpar->codec_id)))
+	{
+		fprintf(stderr, "Could not find input codec\n");
+		avformat_close_input(input_format_context);
+=======
 	if (!(input_codec = avcodec_find_decoder((input_format_context)->streams[0]->codecpar->codec_id)))
 	{
 		fprintf(stderr, "Could not find input codec\n");
 		avformat_close_input(&input_format_context);
+>>>>>>> Stashed changes
 		return AVERROR_EXIT;
 	}
 
@@ -55,15 +62,26 @@ static int open_input_file(const char* filename)
 	if (!avctx)
 	{
 		fprintf(stderr, "Could not allocate a decoding context\n");
+<<<<<<< Updated upstream
+		avformat_close_input(input_format_context);
+=======
 		avformat_close_input(&input_format_context);
+>>>>>>> Stashed changes
 		return AVERROR(ENOMEM);
 	}
 
 	/** initialize the stream parameters with demuxer information */
+<<<<<<< Updated upstream
+	error = avcodec_parameters_to_context(avctx, (*input_format_context)->streams[0]->codecpar);
+	if (error < 0)
+	{
+		avformat_close_input(input_format_context);
+=======
 	error = avcodec_parameters_to_context(avctx, (input_format_context)->streams[0]->codecpar);
 	if (error < 0)
 	{
 		avformat_close_input(&input_format_context);
+>>>>>>> Stashed changes
 		avcodec_free_context(&avctx);
 		return error;
 
@@ -74,16 +92,26 @@ static int open_input_file(const char* filename)
 	{
 		fprintf(stderr, "Could not open input codec (error '%d')\n", error);
 		avcodec_free_context(&avctx);
+<<<<<<< Updated upstream
+		avformat_close_input(input_format_context);
+=======
 		avformat_close_input(&input_format_context);
+>>>>>>> Stashed changes
 		return error;
 	}
 
 	/** Save the decoder context for easier access later. */
+<<<<<<< Updated upstream
+	*input_codec_context = avctx;
+=======
 	input_codec_context = avctx;
+>>>>>>> Stashed changes
 
 	return 0;
 }
 
+<<<<<<< Updated upstream
+=======
 AVFormatContext* getInputFormatContext()
 {
 	return input_format_context;
@@ -94,6 +122,7 @@ AVCodecContext* getInputCodecContext()
 	return input_codec_context;
 }
 
+>>>>>>> Stashed changes
  /**
   * Open an output file and the required encoder.
   * Also set some basic encoder parameters.
@@ -300,7 +329,11 @@ static int write_output_file_header(AVFormatContext* output_format_context)
 }
 
  /** Decode one audio frame from the input file. */
+<<<<<<< Updated upstream
+static int decode_audio_frame(AVFrame* frame, AVFormatContext* input_format_context, AVCodecContext* input_codec_context, int* data_present, int* finished)
+=======
 int decode_audio_frame(AVFrame* frame, AVFormatContext* input_format_context, AVCodecContext* input_codec_context, int* data_present, int* finished)
+>>>>>>> Stashed changes
 {
 	/** Packet used for temporary storage. */
 	AVPacket input_packet;
@@ -438,7 +471,10 @@ static int read_decode_convert_and_store(AVAudioFifo* fifo, AVFormatContext* inp
 	/** Decode one frame worth of audio samples. */
 	if (decode_audio_frame(input_frame, input_format_context, input_codec_context, &data_present, finished))
 		goto cleanup;
+<<<<<<< Updated upstream
+=======
 	
+>>>>>>> Stashed changes
 	/**
 	  * If we are at the end of the file and there are no more samples
 	  * in the decoder which are delayed, we are actually finished.
@@ -614,8 +650,13 @@ static int encode_audio_frame(AVFrame* frame, AVFormatContext* output_format_con
 	 return 0;
  }
 
+<<<<<<< Updated upstream
+ AVFormatContext* input_format_context = NULL;// , * output_format_context = NULL;
+ AVCodecContext* input_codec_context = NULL, *output_codec_context = NULL;
+=======
 AVFormatContext* output_format_context = NULL;
 AVCodecContext *output_codec_context = NULL;
+>>>>>>> Stashed changes
  SwrContext* resample_context = NULL;
  AVAudioFifo* fifo = NULL;
  int finished;
@@ -628,6 +669,19 @@ AVCodecContext *output_codec_context = NULL;
 	 pts = 0;
 	 int error = AVERROR_EXIT;
 	 /** Open the input file for reading. */
+<<<<<<< Updated upstream
+	 if (open_input_file(audioFilename, &input_format_context, &input_codec_context))
+		 return error;
+	 /** Open the output file for writing. */
+	 if (open_output_file(input_codec_context, output_format_context, &output_codec_context))
+		 return error;
+	 /** Initialize the resampler to be able to convert audio sample formats. */
+	 if (init_resampler(input_codec_context, output_codec_context, &resample_context))
+		 return error;
+	 /** Initialize the FIFO buffer to store audio samples to be encoded. */
+	 if (init_fifo(&fifo, output_codec_context))
+		 return error;
+=======
 	 if (open_input_file(audioFilename))
 		 return error;
 	 /** Open the output file for writing. */
@@ -639,6 +693,7 @@ AVCodecContext *output_codec_context = NULL;
 	 ///** Initialize the FIFO buffer to store audio samples to be encoded. */
 	 //if (init_fifo(&fifo, output_codec_context))
 		// return error;
+>>>>>>> Stashed changes
 	 /** Write the header of the output file container. */
 	 //if (write_output_file_header(*output_format_context))
 		// return error;
@@ -715,12 +770,22 @@ AVCodecContext *output_codec_context = NULL;
 	 return 0;
  }
 
+<<<<<<< Updated upstream
+ void audioCleanup(AVFormatContext **output_format_context)
+ {
+	 AVFormatContext* oc = *output_format_context;
+	 /** Write the trailer of the output file container. */
+	 //if (write_output_file_trailer(oc))
+		// return;
+	 if (fifo)
+=======
  void audioCleanup()
  {
 	 //** Write the trailer of the output file container. */
 	 //if (write_output_file_trailer(oc))
 		// return;
 	/* if (fifo)
+>>>>>>> Stashed changes
 		 av_audio_fifo_free(fifo);
 	 swr_free(&resample_context);
 	 if (output_codec_context)
@@ -729,7 +794,11 @@ AVCodecContext *output_codec_context = NULL;
 	 {
 		 avio_closep(&oc->pb);
 		 avformat_free_context(oc);
+<<<<<<< Updated upstream
+	 }
+=======
 	 }*/
+>>>>>>> Stashed changes
 	 if (input_codec_context)
 		 avcodec_free_context(&input_codec_context);
 	 if (input_format_context)
