@@ -74,7 +74,7 @@ static void add_stream(OutputStream* ost, AVFormatContext* oc, AVCodec** codec, 
 	case AVMEDIA_TYPE_AUDIO:
 		c->sample_fmt = (*codec)->sample_fmts ?
 			(*codec)->sample_fmts[0] : AV_SAMPLE_FMT_FLTP;
-		c->sample_rate = 48000;
+		c->sample_rate = audio_input_format_context->streams[0]->time_base.den;
 		c->channels = av_get_channel_layout_nb_channels(c->channel_layout);
 		c->channel_layout = AV_CH_LAYOUT_STEREO;
 		if ((*codec)->channel_layouts) {
@@ -338,7 +338,7 @@ BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, BOOL  
 			avformat_close_input(&audio_input_format_context);
 			return FALSE;
 		}
-		add_stream(&audio_st, output_format_context, &audio_codec, AV_CODEC_ID_PCM_S16LE, vidFmt);
+		add_stream(&audio_st, output_format_context, &audio_codec, (audio_input_format_context)->streams[0]->codecpar->codec_id, vidFmt);
 	}
 
 	/* Now that all the parameters are set, we can open the audio and
