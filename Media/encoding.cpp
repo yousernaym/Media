@@ -234,8 +234,9 @@ static AVFrame* get_audio_frame(OutputStream* ost)
 	bool procedural = false;
 	if (!procedural)
 	{
-		if (decode_audio_frame(frame, ifc, icc, &data_present, &finished))
-			return NULL;
+		
+		//if (decode_audio_frame(frame, ifc, icc, &data_present, &finished))
+			//return NULL;
 
 		if (finished && !data_present)
 		{
@@ -277,7 +278,20 @@ static int write_audio_frame(AVFormatContext* oc, OutputStream* ost)
 	int dst_nb_samples;
 	av_init_packet(&pkt);
 	c = ost->enc;
-	frame = get_audio_frame(ost);
+	int error;
+	AVFormatContext* ifc = getInputFormatContext();
+	if ((error = av_read_frame(ifc, &pkt)) < 0)
+	{
+		/** If we are at the end of the file, flush the decoder below. */
+		if (error == AVERROR_EOF)
+			return 0;
+		{
+			fprintf(stderr, "Could not read frame (error '%d')\n", error);
+			return error;
+		}
+	}
+
+	//frame = get_audio_frame(ost);
 	//if (frame) 
 	//{
 	//	/* convert samples from native format to destination codec format, using the resampler */
@@ -305,20 +319,20 @@ static int write_audio_frame(AVFormatContext* oc, OutputStream* ost)
 	//	frame->pts = av_rescale_q(ost->samples_count, { 1, c->sample_rate }, c->time_base);
 	//	ost->samples_count += dst_nb_samples;
 	//}
-	ret = avcodec_encode_audio2(c, &pkt, frame, &got_packet);
-	if (ret < 0) {
-		fprintf(stderr, "Error encoding audio frame: %d\n", ret);
-		exit(1);
-	}
-	if (got_packet) {
+	//ret = avcodec_encode_audio2(c, &pkt, frame, &got_packet);
+	//if (ret < 0) {
+	//	fprintf(stderr, "Error encoding audio frame: %d\n", ret);
+	//	exit(1);
+	//}
+	//if (got_packet) {
 		ret = write_frame(oc, &c->time_base, ost->st, &pkt);
 		if (ret < 0) {
-			fprintf(stderr, "Error while writing audio frame: %d\n",
-				ret);
+			fprintf(stderr, "Error while writing audio frame: %d\n", ret);
 			exit(1);
 		}
-	}
-	return (frame || got_packet) ? 0 : 1;
+	//}
+	//return (frame || got_packet) ? 0 : 1;
+	return 0;
 }
 
 /**************************************************************/
