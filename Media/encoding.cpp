@@ -23,9 +23,10 @@ typedef struct OutputStream
 } OutputStream;
 
 OutputStream video_st = { 0 }, audio_st = { 0 };
-AVOutputFormat *fmt;
-AVFormatContext *oc;
-AVCodec *audio_codec, *video_codec;
+AVOutputFormat* fmt;
+AVFormatContext* output_format_context = NULL;
+AVFormatContext* audio_input_format_context = NULL;
+AVCodec* audio_codec = NULL, * video_codec = NULL;
 int encode_video = 1, encode_audio = 1;
 
 static int write_frame(AVFormatContext* fmt_ctx, const AVRational* time_base, AVStream* st, AVPacket* pkt)
@@ -44,24 +45,28 @@ static void add_stream(OutputStream* ost, AVFormatContext* oc, AVCodec** codec, 
 	int i;
 	/* find the encoder */
 	*codec = avcodec_find_encoder(codec_id);
-	if (!(*codec)) {
+	if (!(*codec))
+	{
 		fprintf(stderr, "Could not find encoder for '%s'\n",
-			avcodec_get_name(codec_id));
+		avcodec_get_name(codec_id));
 		exit(1);
 	}
 	ost->st = avformat_new_stream(oc, NULL);
-	if (!ost->st) {
+	if (!ost->st) 
+	{
 		fprintf(stderr, "Could not allocate stream\n");
 		exit(1);
 	}
 	ost->st->id = oc->nb_streams - 1;
 	c = avcodec_alloc_context3(*codec);
-	if (!c) {
+	if (!c)
+	{
 		fprintf(stderr, "Could not alloc an encoding context\n");
 		exit(1);
 	}
 	ost->enc = c;
-	switch ((*codec)->type) {
+	switch ((*codec)->type)
+	{
 	case AVMEDIA_TYPE_AUDIO:
 		c->sample_fmt = (*codec)->sample_fmts ?
 			(*codec)->sample_fmts[0] : AV_SAMPLE_FMT_FLTP;
@@ -112,8 +117,8 @@ static void add_stream(OutputStream* ost, AVFormatContext* oc, AVCodec** codec, 
 /* audio output */
 static void open_audio(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, AVDictionary* opt_arg)
 {
-	AVCodecContext* c;
 	int ret;
+	AVCodecContext* c;
 	AVDictionary* opt = NULL;
 	c = ost->enc;
 	/* open it */
@@ -144,8 +149,7 @@ static int write_audio_frame(AVFormatContext* oc, OutputStream* ost)
 	AVPacket pkt = { 0 }; // data and size must be 0;
 	int ret;
 	av_init_packet(&pkt);
-	AVFormatContext* ifc = getInputFormatContext();
-	if ((ret = av_read_frame(ifc, &pkt)) < 0)
+	if ((ret = av_read_frame(audio_input_format_context, &pkt)) < 0)
 	{
 		if (ret == AVERROR_EOF)
 			return 0;
@@ -180,7 +184,8 @@ static AVFrame* alloc_picture(enum AVPixelFormat pix_fmt, int width, int height)
 	picture->height = height;
 	/* allocate the buffers for the frame data */
 	ret = av_frame_get_buffer(picture, 32);
-	if (ret < 0) {
+	if (ret < 0)
+	{
 		fprintf(stderr, "Could not allocate frame data.\n");
 		exit(1);
 	}
@@ -297,38 +302,51 @@ static void close_stream(OutputStream* ost)
 	ost->samples_count = 0;
 }
 
-
 BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, BOOL  _bVideo)
 {
 	AVDictionary* opt = NULL;
 	BOOL ret;
 	/* allocate the output media context */
-	avformat_alloc_output_context2(&oc, NULL, NULL, "dummy.mov");
-	if (!oc)
+	avformat_alloc_output_context2(&output_format_context, NULL, NULL, "dummy.mov");
+	if (!output_format_context)
 		return FALSE;
-	fmt = oc->oformat;
+	fmt = output_format_context->oformat;
 	
 	/* Add the audio and video streams using the default format codecs
 	 * and initialize the codecs. */
-	add_stream(&video_st, oc, &video_codec, AV_CODEC_ID_H264, vidFmt);
+	add_stream(&video_st, output_format_context, &video_codec, AV_CODEC_ID_H264, vidFmt);
 		
 	if (encode_audio)
 	{
-		initAudio(audioFile, oc);
-		add_stream(&audio_st, oc, &audio_codec, AV_CODEC_ID_PCM_S16LE, vidFmt);
+		/** Open the input file to read from it. */
+		if ((ret = avformat_open_input(&audio_input_format_context, audioFile, NULL, NULL)))
+		{
+			fprintf(stderr, "Could not open input file '%s' (error '%d')\n", audioFile, ret);
+			audio_input_format_context = NULL;
+			return ret;
+		}
+
+		/** Get information on the input file (number of streams etc.). */
+		if ((ret = avformat_find_stream_info(audio_input_format_context, NULL)))
+		{
+			fprintf(stderr, "Could not open find stream info (error '%d')\n", ret);
+			avformat_close_input(&audio_input_format_context);
+			return ret;
+		}
+		add_stream(&audio_st, output_format_context, &audio_codec, AV_CODEC_ID_PCM_S16LE, vidFmt);
 	}
 
 	/* Now that all the parameters are set, we can open the audio and
 	 * video codecs and allocate the necessary encode buffers. */
 	if (encode_video)
-		open_video(oc, video_codec, &video_st, opt);
+		open_video(output_format_context, video_codec, &video_st, opt);
 	if (encode_audio)
-		open_audio(oc, audio_codec, &audio_st, opt);
-	av_dump_format(oc, 0, outputFile, 1);
+		open_audio(output_format_context, audio_codec, &audio_st, opt);
+	av_dump_format(output_format_context, 0, outputFile, 1);
 	/* open the output file, if needed */
 	if (!(fmt->flags & AVFMT_NOFILE))
 	{
-		ret = avio_open(&oc->pb, outputFile, AVIO_FLAG_WRITE);
+		ret = avio_open(&output_format_context->pb, outputFile, AVIO_FLAG_WRITE);
 		if (ret < 0)
 		{
 			fprintf(stderr, "Could not open '%s': %d\n", outputFile,
@@ -337,7 +355,7 @@ BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, BOOL  
 		}
 	}
 	/* Write the stream header, if any. */
-	ret = avformat_write_header(oc, &opt);
+	ret = avformat_write_header(output_format_context, &opt);
 	if (ret < 0) 
 	{
 		fprintf(stderr, "Error occurred when opening output file: %d\n", ret);
@@ -351,10 +369,10 @@ BOOL writeFrame(const DWORD *sourceVideoFrame, LONGLONG rtStart, LONGLONG &rtDur
 	if (encode_video &&
 		(!encode_audio || av_compare_ts(video_st.pts, video_st.enc->time_base,
 			audio_st.pts, audio_st.enc->time_base) <= 0)) {
-		encode_video = !write_video_frame(oc, &video_st, (uint8_t*)sourceVideoFrame);
+		encode_video = !write_video_frame(output_format_context, &video_st, (uint8_t*)sourceVideoFrame);
 	}
 	else {
-		encode_audio = !write_audio_frame(oc, &audio_st);
+		encode_audio = !write_audio_frame(output_format_context, &audio_st);
 	}
 	return encode_audio | encode_video;
 }
@@ -365,20 +383,21 @@ void endVideoEnc()
 	 * close the CodecContexts open when you wrote the header; otherwise
 	 * av_write_trailer() may try to use memory that was freed on
 	 * av_codec_close(). */
-	av_write_trailer(oc);
+	av_write_trailer(output_format_context);
 	/* Close each codec. */
 	if (encode_video)
 		close_stream(&video_st);
 	if (encode_audio)
 	{
+		if (audio_input_format_context)
+			avformat_close_input(&audio_input_format_context);
 		close_stream(&audio_st);
-		audioCleanup();
 	}
 	if (!(fmt->flags & AVFMT_NOFILE))
 		/* Close the output file. */
-		avio_closep(&oc->pb);
+		avio_closep(&output_format_context->pb);
 	/* free the stream */
-	avformat_free_context(oc);
+	avformat_free_context(output_format_context);
 }
 
 

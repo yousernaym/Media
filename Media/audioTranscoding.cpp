@@ -614,7 +614,7 @@ static int encode_audio_frame(AVFrame* frame, AVFormatContext* output_format_con
 	 return 0;
  }
 
-AVFormatContext* output_format_context = NULL;
+static AVFormatContext* output_format_context = NULL;
 AVCodecContext *output_codec_context = NULL;
  SwrContext* resample_context = NULL;
  AVAudioFifo* fifo = NULL;
