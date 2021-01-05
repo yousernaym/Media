@@ -1,10 +1,15 @@
-#include "MfStuff.h"
 #include "encoding.h"
-#include <Codecapi.h>
-#define _USE_MATH_DEFINES
-#include <math.h>
-#include "movie.h"
-#include "audioTranscoding.h"
+
+extern "C"
+{
+	#include <libswscale/swscale.h>
+	#include <libavcodec/avcodec.h>
+	#include <libavutil/mathematics.h>
+	#include <libavformat/avformat.h>
+	#include <libavutil/opt.h>
+	#include <libswresample/swresample.h>
+	#include <libavutil/avassert.h>
+}
 
 #define STREAM_PIX_FMT AV_PIX_FMT_YUV420P /* default pix_fmt */
 #define SCALE_FLAGS SWS_BICUBIC
@@ -16,18 +21,17 @@ typedef struct OutputStream
 	AVStream* st;
 	AVCodecContext* enc;
 	int64_t pts;
-	int samples_count;
 	AVFrame* frame;
 	AVFrame* src_frame;
 	struct SwsContext* sws_ctx;
 } OutputStream;
 
-OutputStream video_st = { 0 }, audio_st = { 0 };
-AVOutputFormat* fmt;
-AVFormatContext* output_format_context = NULL;
-AVFormatContext* audio_input_format_context = NULL;
-AVCodec* audio_codec = NULL, * video_codec = NULL;
-int encode_video, encode_audio;
+static OutputStream video_st = { 0 }, audio_st = { 0 };
+static AVOutputFormat* fmt;
+static AVFormatContext* output_format_context = NULL;
+static AVFormatContext* audio_input_format_context = NULL;
+static AVCodec* audio_codec = NULL, * video_codec = NULL;
+static int encode_video, encode_audio;
 
 static int write_frame(AVFormatContext* fmt_ctx, const AVRational* time_base, AVStream* st, AVPacket* pkt)
 {
@@ -301,7 +305,6 @@ static void close_stream(OutputStream* ost)
 	ost->sws_ctx = NULL;
 	ost->pts = 0;
 	ost->st = NULL;
-	ost->samples_count = 0;
 }
 
 BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, BOOL  _bVideo)
@@ -367,7 +370,7 @@ BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, BOOL  
 	return TRUE;
 }
 
-BOOL writeFrame(const DWORD *sourceVideoFrame, LONGLONG rtStart, LONGLONG &rtDuration, double audioOffset)
+BOOL writeFrame(const DWORD *sourceVideoFrame, double audioOffset)
 {
 	if (encode_video)
 		encode_video = !write_video_frame(output_format_context, &video_st, (uint8_t*)sourceVideoFrame);

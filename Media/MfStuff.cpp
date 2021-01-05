@@ -22,8 +22,7 @@ BOOL initMF()
 		CoUninitialize();
 		return FALSE;
 	}
-	//av_register_all();
-
+	
 	return TRUE;
 }
 
