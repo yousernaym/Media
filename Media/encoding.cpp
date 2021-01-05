@@ -31,7 +31,7 @@ static AVOutputFormat* fmt;
 static AVFormatContext* output_format_context = NULL;
 static AVFormatContext* audio_input_format_context = NULL;
 static AVCodec* audio_codec = NULL, * video_codec = NULL;
-static int encode_video, encode_audio;
+static int encode_video, have_video, encode_audio, have_audio;
 
 static int write_frame(AVFormatContext* fmt_ctx, const AVRational* time_base, AVStream* st, AVPacket* pkt)
 {
@@ -223,7 +223,6 @@ static void open_video(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, A
 	}
 	
 	//Source frame
-	ost->src_frame = NULL;
 	ost->src_frame = alloc_picture(AV_PIX_FMT_RGB24, c->width, c->height);
 	if (!ost->src_frame)
 	{
@@ -309,7 +308,7 @@ static void close_stream(OutputStream* ost)
 
 BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, BOOL  _bVideo)
 {
-	encode_audio = encode_video = true;
+	encode_audio = encode_video = have_video = have_audio = true;
 	AVDictionary* opt = NULL;
 	BOOL ret;
 	/* allocate the output media context */
@@ -329,7 +328,7 @@ BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, BOOL  
 		{
 			fprintf(stderr, "Could not open input file '%s' (error '%d')\n", audioFile, ret);
 			audio_input_format_context = NULL;
-			return ret;
+			return FALSE;
 		}
 
 		/** Get information on the input file (number of streams etc.). */
@@ -337,7 +336,7 @@ BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, BOOL  
 		{
 			fprintf(stderr, "Could not open find stream info (error '%d')\n", ret);
 			avformat_close_input(&audio_input_format_context);
-			return ret;
+			return FALSE;
 		}
 		add_stream(&audio_st, output_format_context, &audio_codec, AV_CODEC_ID_PCM_S16LE, vidFmt);
 	}
@@ -387,9 +386,9 @@ void endVideoEnc()
 	 * av_codec_close(). */
 	av_write_trailer(output_format_context);
 	/* Close each codec. */
-	if (encode_video)
+	if (have_video)
 		close_stream(&video_st);
-	if (encode_audio)
+	if (have_audio)
 	{
 		if (audio_input_format_context)
 			avformat_close_input(&audio_input_format_context);
