@@ -9,6 +9,7 @@ extern "C"
 	#include <libavutil/opt.h>
 	#include <libswresample/swresample.h>
 	#include <libavutil/avassert.h>
+	#include <libavformat/avio.h>
 }
 
 #define STREAM_PIX_FMT AV_PIX_FMT_YUV420P /* default pix_fmt */
@@ -37,6 +38,7 @@ static int write_frame(AVFormatContext* fmt_ctx, const AVRational* time_base, AV
 {
 	/* rescale output packet timestamp values from codec to stream timebase */
 	av_packet_rescale_ts(pkt, *time_base, st->time_base);
+	
 	pkt->stream_index = st->index;
 	/* Write the compressed frame to the media file. */
 	return av_interleaved_write_frame(fmt_ctx, pkt);
@@ -108,6 +110,20 @@ static void add_stream(OutputStream* ost, AVFormatContext* oc, AVCodec** codec, 
 				"Could not initialize the conversion context\n");
 			exit(1);
 		}
+
+		//Spherical metadata
+		av_dict_set(&ost->st->metadata, "spherical-video", "<rdf:SphericalVideo> <GSpherical:Spherical>true</GSpherical:Spherical> <GSpherical:Stitched>true</GSpherical:Stitched> <GSpherical:ProjectionType>equirectangular</GSpherical:ProjectionType> </rdf:SphericalVideo>", 0);
+
+		
+		//if (track->mode == MODE_MP4 && mov->fc->strict_std_compliance <= FF_COMPLIANCE_UNOFFICIAL) {
+		//	AVStereo3D* stereo_3d = (AVStereo3D*)av_stream_get_side_data(track->st, AV_PKT_DATA_STEREO3D, NULL);
+		//	AVSphericalMapping* spherical_mapping = (AVSphericalMapping*)av_stream_get_side_data(track->st, AV_PKT_DATA_SPHERICAL, NULL);
+
+		//	if (stereo_3d)
+		//		mov_write_st3d_tag(pb, stereo_3d);
+		//	if (spherical_mapping)
+		//		mov_write_sv3d_tag(mov->fc, pb, spherical_mapping);
+		//}
 		break;
 	default:
 		break;
@@ -164,8 +180,11 @@ static int write_audio_frame(AVFormatContext* oc, OutputStream* ost)
 		}
 	}
 	
+	//pkt.pts = pkt.pts * 33 / 48;
+	//pkt.dts = pkt.dts * 33 / 48;
 	ost->pts = pkt.pts;
-	ret = write_frame(output_format_context, &ost->st->time_base, ost->st, &pkt);
+	AVRational time_base = { 1, 48000 };
+	ret = write_frame(output_format_context, &time_base, ost->st, &pkt);
 	//pkt.stream_index = ost->st->index;
 	//ret = av_interleaved_write_frame(oc, &pkt);
 	if (ret < 0) 
@@ -204,8 +223,22 @@ static void open_video(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, A
 	AVCodecContext* c = ost->enc;
 	AVDictionary* opt = NULL;
 	av_dict_copy(&opt, opt_arg, 0);
+	
+	//H264 options
 	av_dict_set(&opt, "preset", "ultrafast", 0);
-	av_dict_set(&opt, "crf", "1", 0);
+	av_dict_set(&opt, "crf", "0", 0); //Constant qualitty mode
+
+	//VP9 options
+	//av_dict_set(&opt, "b:v", "0", 0); //Constant qualitty mode
+	av_dict_set(&opt, "deadline", "good", 0); //Encoding speed vs compression
+	av_dict_set(&opt, "quality", "good", 0); //Encoding speed vs compression
+	av_dict_set(&opt, "row-mt", "1", 0); //Row-based multithreading
+	av_dict_set(&opt, "lossless", "1", 0); //Row-based multithreading
+
+	//av_dict_set(&opt, "strict", "unofficial", 0);
+
+	//av_dict_set(&opt, "metadata", "spherical-video=\"<rdf:SphericalVideo> <GSpherical:Spherical>true</GSpherical:Spherical> <GSpherical:Stitched>true</GSpherical:Stitched> <GSpherical:ProjectionType>equirectangular</GSpherical:ProjectionType> </rdf:SphericalVideo>\"", 0);
+
 	/* open the codec */
 	ret = avcodec_open2(c, codec, &opt);
 	av_dict_free(&opt);
@@ -308,18 +341,19 @@ static void close_stream(OutputStream* ost)
 
 BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, BOOL  _bVideo)
 {
-	encode_audio = encode_video = have_video = have_audio = true;
+	encode_video = have_video = 1;
+	encode_audio = have_audio = 1;
 	AVDictionary* opt = NULL;
 	BOOL ret;
 	/* allocate the output media context */
-	avformat_alloc_output_context2(&output_format_context, NULL, NULL, "dummy.mov");
+	avformat_alloc_output_context2(&output_format_context, NULL, NULL, "dummy.mkv");
 	if (!output_format_context)
 		return FALSE;
 	fmt = output_format_context->oformat;
 	
 	/* Add the audio and video streams using the default format codecs
 	 * and initialize the codecs. */
-	add_stream(&video_st, output_format_context, &video_codec, AV_CODEC_ID_H264, vidFmt);
+	add_stream(&video_st, output_format_context, &video_codec, AV_CODEC_ID_VP9, vidFmt);
 		
 	if (encode_audio)
 	{
@@ -373,7 +407,7 @@ BOOL writeFrame(const DWORD *sourceVideoFrame, double audioOffset)
 {
 	if (encode_video)
 		encode_video = !write_video_frame(output_format_context, &video_st, (uint8_t*)sourceVideoFrame);
-	while (encode_audio && (!encode_video || av_compare_ts(video_st.pts, video_st.enc->time_base, audio_st.pts, audio_st.enc->time_base)) > 0)
+	while (encode_audio && (!encode_video || av_compare_ts(video_st.pts, video_st.enc->time_base, audio_st.pts, audio_st.enc->time_base) > 0))
 		encode_audio = !write_audio_frame(output_format_context, &audio_st);
 	return encode_audio | encode_video;
 }
