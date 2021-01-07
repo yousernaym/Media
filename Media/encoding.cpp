@@ -25,6 +25,8 @@ typedef struct OutputStream
 	AVFrame* frame;
 	AVFrame* src_frame;
 	struct SwsContext* sws_ctx;
+	AVRational src_time_base;
+	int64_t dest_pts;
 } OutputStream;
 
 static OutputStream video_st = { 0 }, audio_st = { 0 };
@@ -34,12 +36,12 @@ static AVFormatContext* audio_input_format_context = NULL;
 static AVCodec* audio_codec = NULL, * video_codec = NULL;
 static int encode_video, have_video, encode_audio, have_audio;
 
-static int write_frame(AVFormatContext* fmt_ctx, const AVRational* time_base, AVStream* st, AVPacket* pkt)
+static int write_frame(AVFormatContext* fmt_ctx, OutputStream* ost, AVPacket* pkt)
 {
 	/* rescale output packet timestamp values from codec to stream timebase */
-	av_packet_rescale_ts(pkt, *time_base, st->time_base);
-	
-	pkt->stream_index = st->index;
+	av_packet_rescale_ts(pkt, ost->src_time_base, ost->st->time_base);
+	ost->dest_pts = pkt->pts;
+	pkt->stream_index = ost->st->index;
 	/* Write the compressed frame to the media file. */
 	return av_interleaved_write_frame(fmt_ctx, pkt);
 }
@@ -87,7 +89,7 @@ static void add_stream(OutputStream* ost, AVFormatContext* oc, AVCodec** codec, 
 			}
 		}
 		c->channels = av_get_channel_layout_nb_channels(c->channel_layout);
-		ost->st->time_base = { 1, c->sample_rate };
+		ost->st->time_base = ost->src_time_base = { 1, c->sample_rate }; //st->time_base may be changed by the container when writing the header so we keep the original time_base in src_time_base for correct pts/dts scaling
 		break;
 	case AVMEDIA_TYPE_VIDEO:
 		c->codec_id = codec_id;
@@ -98,8 +100,7 @@ static void add_stream(OutputStream* ost, AVFormatContext* oc, AVCodec** codec, 
 		 * of which frame timestamps are represented. For fixed-fps content,
 		 * timebase should be 1/framerate and timestamp increments should be
 		 * identical to 1. */
-		ost->st->time_base = { 100, (int)(vidFmt.fps * 100) };
-		c->time_base = ost->st->time_base;
+		c->time_base = ost->src_time_base = ost->st->time_base = { 100, (int)(vidFmt.fps * 100) };
 		c->gop_size = 12; /* emit one intra frame every twelve frames at most */
 		c->pix_fmt = AV_PIX_FMT_YUV420P;
 
@@ -180,13 +181,7 @@ static int write_audio_frame(AVFormatContext* oc, OutputStream* ost)
 		}
 	}
 	
-	//pkt.pts = pkt.pts * 33 / 48;
-	//pkt.dts = pkt.dts * 33 / 48;
-	ost->pts = pkt.pts;
-	AVRational time_base = { 1, 48000 };
-	ret = write_frame(output_format_context, &time_base, ost->st, &pkt);
-	//pkt.stream_index = ost->st->index;
-	//ret = av_interleaved_write_frame(oc, &pkt);
+	ret = write_frame(output_format_context, ost, &pkt);
 	if (ret < 0) 
 	{
 		fprintf(stderr, "Error while writing audio frame: %d\n", ret);
@@ -289,8 +284,7 @@ static AVFrame* get_video_frame(OutputStream* ost, const uint8_t* pixels)
 		}
 	}
 	sws_scale(ost->sws_ctx, (const uint8_t* const*)ost->src_frame->data, ost->src_frame->linesize, 0, c->height, ost->frame->data, ost->frame->linesize);
-	ost->frame->pts = ost->pts;
-	ost->pts += 1;
+	ost->frame->pts = ost->pts++;
 	return ost->frame;
 }
 
@@ -317,7 +311,7 @@ static int write_video_frame(AVFormatContext* oc, OutputStream* ost, const uint8
 		exit(1);
 	}
 	if (got_packet) 
-		ret = write_frame(oc, &c->time_base, ost->st, &pkt);
+		ret = write_frame(oc, ost, &pkt);
 	else 
 		ret = 0;
 	if (ret < 0) 
@@ -335,7 +329,7 @@ static void close_stream(OutputStream* ost)
 	av_frame_free(&ost->src_frame);
 	sws_freeContext(ost->sws_ctx);
 	ost->sws_ctx = NULL;
-	ost->pts = 0;
+	ost->pts = ost->dest_pts = 0;
 	ost->st = NULL;
 }
 
@@ -407,7 +401,7 @@ BOOL writeFrame(const DWORD *sourceVideoFrame, double audioOffset)
 {
 	if (encode_video)
 		encode_video = !write_video_frame(output_format_context, &video_st, (uint8_t*)sourceVideoFrame);
-	while (encode_audio && (!encode_video || av_compare_ts(video_st.pts, video_st.enc->time_base, audio_st.pts, audio_st.enc->time_base) > 0))
+	while (encode_audio && (!encode_video || video_st.dest_pts > audio_st.dest_pts))
 		encode_audio = !write_audio_frame(output_format_context, &audio_st);
 	return encode_audio | encode_video;
 }
