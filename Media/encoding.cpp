@@ -112,10 +112,6 @@ static void add_stream(OutputStream* ost, AVFormatContext* oc, AVCodec** codec, 
 			exit(1);
 		}
 
-		//Spherical metadata
-		av_dict_set(&ost->st->metadata, "spherical-video", "<rdf:SphericalVideo> <GSpherical:Spherical>true</GSpherical:Spherical> <GSpherical:Stitched>true</GSpherical:Stitched> <GSpherical:ProjectionType>equirectangular</GSpherical:ProjectionType> </rdf:SphericalVideo>", 0);
-
-		
 		//if (track->mode == MODE_MP4 && mov->fc->strict_std_compliance <= FF_COMPLIANCE_UNOFFICIAL) {
 		//	AVStereo3D* stereo_3d = (AVStereo3D*)av_stream_get_side_data(track->st, AV_PKT_DATA_STEREO3D, NULL);
 		//	AVSphericalMapping* spherical_mapping = (AVSphericalMapping*)av_stream_get_side_data(track->st, AV_PKT_DATA_SPHERICAL, NULL);
@@ -335,9 +331,9 @@ static void close_stream(OutputStream* ost)
 	ost->st = NULL;
 }
 
-BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, double audioOffsetSeconds)
+BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, double audioOffsetSeconds, BOOL spherical)
 {
-	audioOffsetTimestamp = audioOffsetSeconds * vidFmt.audioSampleRate;
+	audioOffsetTimestamp = (int64_t)(audioOffsetSeconds * vidFmt.audioSampleRate);
 	encode_video = have_video = 1;
 	encode_audio = have_audio = audioFile != NULL && strlen(audioFile) > 0;
 	AVDictionary* opt = NULL;
@@ -351,7 +347,11 @@ BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, double
 	/* Add the audio and video streams using the default format codecs
 	 * and initialize the codecs. */
 	add_stream(&video_st, output_format_context, &video_codec, AV_CODEC_ID_H264, vidFmt);
-		
+	//Spherical metadata
+	if (spherical)
+		//av_dict_set(&video_st.st->metadata, "spherical-video", "<rdf:SphericalVideo> <GSpherical:Spherical>true</GSpherical:Spherical> <GSpherical:Stitched>true</GSpherical:Stitched> <GSpherical:ProjectionType>equirectangular</GSpherical:ProjectionType> </rdf:SphericalVideo>", 0);
+		av_dict_set(&video_st.st->metadata, "spherical-video", "<rdf:SphericalVideo xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\" xmlns:GSpherical=\"http://ns.google.com/videos/1.0/spherical/\"> <GSpherical:Spherical>true</GSpherical:Spherical> <GSpherical:Stitched>true</GSpherical:Stitched> <GSpherical:ProjectionType>equirectangular</GSpherical:ProjectionType> </rdf:SphericalVideo>", 0);
+
 	if (encode_audio)
 	{
 		/** Open the input file to read from it. */
