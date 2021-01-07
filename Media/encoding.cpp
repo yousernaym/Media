@@ -34,6 +34,7 @@ static AVFormatContext* output_format_context = NULL;
 static AVFormatContext* audio_input_format_context = NULL;
 static AVCodec* audio_codec = NULL, * video_codec = NULL;
 static int encode_video, have_video, encode_audio, have_audio;
+static int64_t audioOffsetTimestamp;
 
 static int write_frame(AVFormatContext* fmt_ctx, OutputStream* ost, AVPacket* pkt)
 {
@@ -180,12 +181,14 @@ static int write_audio_frame(AVFormatContext* oc, OutputStream* ost)
 		}
 	}
 	
+	pkt.pts += audioOffsetTimestamp;
+	pkt.dts += audioOffsetTimestamp;
+	if (pkt.pts < 0)
+		return 0;
 	ret = write_frame(output_format_context, ost, &pkt);
 	if (ret < 0) 
-	{
 		fprintf(stderr, "Error while writing audio frame: %d\n", ret);
-		exit(1);
-	}
+
 	return ret;
 }
 
@@ -332,10 +335,11 @@ static void close_stream(OutputStream* ost)
 	ost->st = NULL;
 }
 
-BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, BOOL  _bVideo)
+BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, double audioOffsetSeconds)
 {
+	audioOffsetTimestamp = audioOffsetSeconds * vidFmt.audioSampleRate;
 	encode_video = have_video = 1;
-	encode_audio = have_audio = 1;
+	encode_audio = have_audio = audioFile != NULL && strlen(audioFile) > 0;
 	AVDictionary* opt = NULL;
 	BOOL ret;
 	/* allocate the output media context */
@@ -396,7 +400,7 @@ BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, BOOL  
 	return TRUE;
 }
 
-BOOL writeFrame(const DWORD *sourceVideoFrame, double audioOffset)
+BOOL writeFrame(const DWORD *sourceVideoFrame)
 {
 	if (encode_video)
 		encode_video = !write_video_frame(output_format_context, &video_st, (uint8_t*)sourceVideoFrame);
