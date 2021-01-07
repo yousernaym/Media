@@ -16,7 +16,7 @@ struct VideoFormat
 
 extern "C"
 {
-	__declspec(dllexport) BOOL beginVideoEnc(char *outputFile, char *audioFile, VideoFormat vidFmt, double audioOffsetSeconds, BOOL spherical, enum AVCodecID video_codec_id);
+	__declspec(dllexport) BOOL beginVideoEnc(char *outputFile, char *audioFile, VideoFormat vidFmt, double audioOffsetSeconds, BOOL spherical, BOOL spherical_stereo, enum AVCodecID video_codec_id);
 	__declspec(dllexport) BOOL writeFrame(const DWORD *videoFrameBuffer);
 	__declspec(dllexport) void endVideoEnc();
 }

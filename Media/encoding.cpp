@@ -331,7 +331,7 @@ static void close_stream(OutputStream* ost)
 	ost->st = NULL;
 }
 
-BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, double audioOffsetSeconds, BOOL spherical, AVCodecID video_codec_id)
+BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, double audioOffsetSeconds, BOOL spherical, BOOL spherical_stereo, AVCodecID video_codec_id)
 {
 	audioOffsetTimestamp = (int64_t)(audioOffsetSeconds * vidFmt.audioSampleRate);
 	encode_video = have_video = 1;
@@ -349,8 +349,16 @@ BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, double
 	add_stream(&video_st, output_format_context, &video_codec, video_codec_id, vidFmt);
 	//Spherical metadata
 	if (spherical)
-		//av_dict_set(&video_st.st->metadata, "spherical-video", "<rdf:SphericalVideo> <GSpherical:Spherical>true</GSpherical:Spherical> <GSpherical:Stitched>true</GSpherical:Stitched> <GSpherical:ProjectionType>equirectangular</GSpherical:ProjectionType> </rdf:SphericalVideo>", 0);
-		av_dict_set(&video_st.st->metadata, "spherical-video", "<rdf:SphericalVideo xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\" xmlns:GSpherical=\"http://ns.google.com/videos/1.0/spherical/\"> <GSpherical:Spherical>true</GSpherical:Spherical> <GSpherical:Stitched>true</GSpherical:Stitched> <GSpherical:ProjectionType>equirectangular</GSpherical:ProjectionType> </rdf:SphericalVideo>", 0);
+	{
+		char stereo_arg[100];
+		if (spherical_stereo)
+			strcpy(stereo_arg, "<GSpherical:StereoMode>top-bottom</GSpherical:StereoMode>");
+		else
+			stereo_arg[0] = 0;
+		char metadata_string[1000];
+		sprintf(metadata_string, "<rdf:SphericalVideo xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\" xmlns:GSpherical=\"http://ns.google.com/videos/1.0/spherical/\"> <GSpherical:Spherical>true</GSpherical:Spherical> <GSpherical:Stitched>true</GSpherical:Stitched> <GSpherical:ProjectionType>equirectangular</GSpherical:ProjectionType> %s </rdf:SphericalVideo>", stereo_arg);
+		av_dict_set(&video_st.st->metadata, "spherical-video", metadata_string, 0);
+	}
 
 	if (encode_audio)
 	{
