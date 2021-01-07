@@ -25,7 +25,6 @@ typedef struct OutputStream
 	AVFrame* frame;
 	AVFrame* src_frame;
 	struct SwsContext* sws_ctx;
-	AVRational src_time_base;
 	int64_t dest_pts;
 } OutputStream;
 
@@ -39,7 +38,7 @@ static int encode_video, have_video, encode_audio, have_audio;
 static int write_frame(AVFormatContext* fmt_ctx, OutputStream* ost, AVPacket* pkt)
 {
 	/* rescale output packet timestamp values from codec to stream timebase */
-	av_packet_rescale_ts(pkt, ost->src_time_base, ost->st->time_base);
+	av_packet_rescale_ts(pkt, ost->enc->time_base, ost->st->time_base);
 	ost->dest_pts = pkt->pts;
 	pkt->stream_index = ost->st->index;
 	/* Write the compressed frame to the media file. */
@@ -89,7 +88,7 @@ static void add_stream(OutputStream* ost, AVFormatContext* oc, AVCodec** codec, 
 			}
 		}
 		c->channels = av_get_channel_layout_nb_channels(c->channel_layout);
-		ost->st->time_base = ost->src_time_base = { 1, c->sample_rate }; //st->time_base may be changed by the container when writing the header so we keep the original time_base in src_time_base for correct pts/dts scaling
+		ost->st->time_base = { 1, c->sample_rate };
 		break;
 	case AVMEDIA_TYPE_VIDEO:
 		c->codec_id = codec_id;
@@ -100,7 +99,7 @@ static void add_stream(OutputStream* ost, AVFormatContext* oc, AVCodec** codec, 
 		 * of which frame timestamps are represented. For fixed-fps content,
 		 * timebase should be 1/framerate and timestamp increments should be
 		 * identical to 1. */
-		c->time_base = ost->src_time_base = ost->st->time_base = { 100, (int)(vidFmt.fps * 100) };
+		c->time_base = ost->st->time_base = { 100, (int)(vidFmt.fps * 100) };
 		c->gop_size = 12; /* emit one intra frame every twelve frames at most */
 		c->pix_fmt = AV_PIX_FMT_YUV420P;
 
@@ -347,7 +346,7 @@ BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, BOOL  
 	
 	/* Add the audio and video streams using the default format codecs
 	 * and initialize the codecs. */
-	add_stream(&video_st, output_format_context, &video_codec, AV_CODEC_ID_VP9, vidFmt);
+	add_stream(&video_st, output_format_context, &video_codec, AV_CODEC_ID_H264, vidFmt);
 		
 	if (encode_audio)
 	{
