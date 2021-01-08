@@ -47,7 +47,7 @@ static int write_frame(AVFormatContext* fmt_ctx, OutputStream* ost, AVPacket* pk
 }
 
 /* Add an output stream. */
-static void add_stream(OutputStream* ost, AVFormatContext* oc, AVCodec** codec, enum AVCodecID codec_id, const VideoFormat &vidFmt)
+static BOOL add_stream(OutputStream* ost, AVFormatContext* oc, AVCodec** codec, enum AVCodecID codec_id, const VideoFormat &vidFmt)
 {
 	AVCodecContext* c;
 	int i;
@@ -57,20 +57,20 @@ static void add_stream(OutputStream* ost, AVFormatContext* oc, AVCodec** codec, 
 	{
 		fprintf(stderr, "Could not find encoder for '%s'\n",
 		avcodec_get_name(codec_id));
-		exit(1);
+		return FALSE;
 	}
 	ost->st = avformat_new_stream(oc, NULL);
 	if (!ost->st) 
 	{
 		fprintf(stderr, "Could not allocate stream\n");
-		exit(1);
+		return FALSE;
 	}
 	ost->st->id = oc->nb_streams - 1;
 	c = avcodec_alloc_context3(*codec);
 	if (!c)
 	{
 		fprintf(stderr, "Could not alloc an encoding context\n");
-		exit(1);
+		return FALSE;
 	}
 	ost->enc = c;
 	switch ((*codec)->type)
@@ -109,7 +109,7 @@ static void add_stream(OutputStream* ost, AVFormatContext* oc, AVCodec** codec, 
 		{
 			fprintf(stderr,
 				"Could not initialize the conversion context\n");
-			exit(1);
+			return FALSE;
 		}
 
 		//if (track->mode == MODE_MP4 && mov->fc->strict_std_compliance <= FF_COMPLIANCE_UNOFFICIAL) {
@@ -128,11 +128,12 @@ static void add_stream(OutputStream* ost, AVFormatContext* oc, AVCodec** codec, 
 	/* Some formats want stream headers to be separate. */
 	if (oc->oformat->flags & AVFMT_GLOBALHEADER)
 		c->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+	return TRUE;
 }
 
 /**************************************************************/
 /* audio output */
-static void open_audio(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, AVDictionary* opt_arg)
+static BOOL open_audio(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, AVDictionary* opt_arg)
 {
 	int ret;
 	AVCodecContext* c;
@@ -145,7 +146,7 @@ static void open_audio(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, A
 	if (ret < 0) 
 	{
 		fprintf(stderr, "Could not open audio codec: %d\n", ret);
-		exit(1);
+		return FALSE;
 	}
 	
 	/* copy the stream parameters to the muxer */
@@ -153,8 +154,9 @@ static void open_audio(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, A
 	if (ret < 0) 
 	{
 		fprintf(stderr, "Could not copy the stream parameters\n");
-		exit(1);
+		return FALSE;
 	}
+	return TRUE;
 }
 
 /*
@@ -205,12 +207,12 @@ static AVFrame* alloc_picture(enum AVPixelFormat pix_fmt, int width, int height)
 	if (ret < 0)
 	{
 		fprintf(stderr, "Could not allocate frame data.\n");
-		exit(1);
+		return NULL;
 	}
 	return picture;
 }
 
-static void open_video(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, AVDictionary* opt_arg)
+static BOOL open_video(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, AVDictionary* opt_arg)
 {
 	int ret;
 	AVCodecContext* c = ost->enc;
@@ -238,14 +240,14 @@ static void open_video(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, A
 	if (ret < 0) 
 	{
 		fprintf(stderr, "Could not open video codec: %d\n", ret);
-		exit(1);
+		return FALSE;
 	}
 	/* allocate and init a re-usable frame */
 	ost->frame = alloc_picture(c->pix_fmt, c->width, c->height);
 	if (!ost->frame) 
 	{
 		fprintf(stderr, "Could not allocate video frame\n");
-		exit(1);
+		return FALSE;
 	}
 	
 	//Source frame
@@ -253,15 +255,16 @@ static void open_video(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, A
 	if (!ost->src_frame)
 	{
 		fprintf(stderr, "Could not allocate temporary picture\n");
-		exit(1);
+		return FALSE;
 	}
 	/* copy the stream parameters to the muxer */
 	ret = avcodec_parameters_from_context(ost->st->codecpar, c);
 	if (ret < 0) 
 	{
 		fprintf(stderr, "Could not copy the stream parameters\n");
-		exit(1);
+		return FALSE;
 	}
+	return TRUE;
 }
 
 static AVFrame* get_video_frame(OutputStream* ost, const uint8_t* pixels)
@@ -346,7 +349,8 @@ BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, double
 	
 	/* Add the audio and video streams using the default format codecs
 	 * and initialize the codecs. */
-	add_stream(&video_st, output_format_context, &video_codec, video_codec_id, vidFmt);
+	if (!add_stream(&video_st, output_format_context, &video_codec, video_codec_id, vidFmt))
+		return FALSE;
 	//Spherical metadata
 	if (spherical)
 	{
@@ -377,15 +381,22 @@ BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, double
 			avformat_close_input(&audio_input_format_context);
 			return FALSE;
 		}
-		add_stream(&audio_st, output_format_context, &audio_codec, (audio_input_format_context)->streams[0]->codecpar->codec_id, vidFmt);
+		if (!add_stream(&audio_st, output_format_context, &audio_codec, (audio_input_format_context)->streams[0]->codecpar->codec_id, vidFmt))
+			return FALSE;
 	}
 
 	/* Now that all the parameters are set, we can open the audio and
 	 * video codecs and allocate the necessary encode buffers. */
 	if (encode_video)
-		open_video(output_format_context, video_codec, &video_st, opt);
+	{
+		if (!open_video(output_format_context, video_codec, &video_st, opt))
+			return FALSE;
+	}
 	if (encode_audio)
-		open_audio(output_format_context, audio_codec, &audio_st, opt);
+	{
+		if (!open_audio(output_format_context, audio_codec, &audio_st, opt))
+			return FALSE;
+	}
 	av_dump_format(output_format_context, 0, outputFile, 1);
 	/* open the output file, if needed */
 	if (!(fmt->flags & AVFMT_NOFILE))
