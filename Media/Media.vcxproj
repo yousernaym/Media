@@ -155,18 +155,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="audioTranscoding.cpp" />
     <ClCompile Include="encoding.cpp" />
     <ClCompile Include="MfStuff.cpp" />
-    <ClCompile Include="mux.cpp" />
     <ClCompile Include="playback.cpp" />
-    <ClCompile Include="writer.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="audioTranscoding.h" />
     <ClInclude Include="encoding.h" />
     <ClInclude Include="MfStuff.h" />
-    <ClInclude Include="movie.h" />
     <ClInclude Include="playback.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

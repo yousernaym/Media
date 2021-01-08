@@ -1,3 +1,12 @@
+/*
+Video file creation, based mostly on Ffmpeg muxing example:
+https://ffmpeg.org/doxygen/trunk/muxing_8c_source.html
+With a few lines from the AAC Transcoding example:
+https://ffmpeg.org/doxygen/3.4/transcode__aac_8c_source.html
+and Moviemaker-cpp:
+https://github.com/apc-llc/moviemaker-cpp
+*/
+
 #include "encoding.h"
 
 extern "C"
@@ -111,16 +120,6 @@ static BOOL add_stream(OutputStream* ost, AVFormatContext* oc, AVCodec** codec, 
 				"Could not initialize the conversion context\n");
 			return FALSE;
 		}
-
-		//if (track->mode == MODE_MP4 && mov->fc->strict_std_compliance <= FF_COMPLIANCE_UNOFFICIAL) {
-		//	AVStereo3D* stereo_3d = (AVStereo3D*)av_stream_get_side_data(track->st, AV_PKT_DATA_STEREO3D, NULL);
-		//	AVSphericalMapping* spherical_mapping = (AVSphericalMapping*)av_stream_get_side_data(track->st, AV_PKT_DATA_SPHERICAL, NULL);
-
-		//	if (stereo_3d)
-		//		mov_write_st3d_tag(pb, stereo_3d);
-		//	if (spherical_mapping)
-		//		mov_write_sv3d_tag(mov->fc, pb, spherical_mapping);
-		//}
 		break;
 	default:
 		break;
@@ -226,13 +225,9 @@ static BOOL open_video(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, A
 	//VP9 options
 	//av_dict_set(&opt, "b:v", "0", 0); //Constant qualitty mode
 	av_dict_set(&opt, "deadline", "good", 0); //Encoding speed vs compression
-	av_dict_set(&opt, "quality", "good", 0); //Encoding speed vs compression
+	av_dict_set(&opt, "quality", "good", 0); //Same as deadline?
 	av_dict_set(&opt, "row-mt", "1", 0); //Row-based multithreading
-	av_dict_set(&opt, "lossless", "1", 0); //Row-based multithreading
-
-	//av_dict_set(&opt, "strict", "unofficial", 0);
-
-	//av_dict_set(&opt, "metadata", "spherical-video=\"<rdf:SphericalVideo> <GSpherical:Spherical>true</GSpherical:Spherical> <GSpherical:Stitched>true</GSpherical:Stitched> <GSpherical:ProjectionType>equirectangular</GSpherical:ProjectionType> </rdf:SphericalVideo>\"", 0);
+	av_dict_set(&opt, "lossless", "1", 0);
 
 	/* open the codec */
 	ret = avcodec_open2(c, codec, &opt);
@@ -450,5 +445,3 @@ void endVideoEnc()
 	/* free the stream */
 	avformat_free_context(output_format_context);
 }
-
-
