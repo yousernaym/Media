@@ -90,9 +90,11 @@ static BOOL add_stream(OutputStream* ost, AVFormatContext* oc, AVCodec** codec, 
 		c->sample_rate = audio_input_format_context->streams[0]->time_base.den;
 		c->channels = av_get_channel_layout_nb_channels(c->channel_layout);
 		c->channel_layout = AV_CH_LAYOUT_STEREO;
-		if ((*codec)->channel_layouts) {
+		if ((*codec)->channel_layouts)
+		{
 			c->channel_layout = (*codec)->channel_layouts[0];
-			for (i = 0; (*codec)->channel_layouts[i]; i++) {
+			for (i = 0; (*codec)->channel_layouts[i]; i++)
+			{
 				if ((*codec)->channel_layouts[i] == AV_CH_LAYOUT_STEREO)
 					c->channel_layout = AV_CH_LAYOUT_STEREO;
 			}
@@ -220,7 +222,7 @@ static BOOL open_video(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, A
 	
 	//H264 options
 	av_dict_set(&opt, "preset", "ultrafast", 0);
-	av_dict_set(&opt, "crf", "0", 0); //Constant qualitty mode
+	av_dict_set(&opt, "crf", "17", 0); //Constant qualitty mode
 
 	//VP9 options
 	//av_dict_set(&opt, "b:v", "0", 0); //Constant qualitty mode
@@ -329,6 +331,24 @@ static void close_stream(OutputStream* ost)
 	ost->st = NULL;
 }
 
+void freeResources()
+{
+	/* Close each codec. */
+	if (have_video)
+		close_stream(&video_st);
+	if (have_audio)
+	{
+		if (audio_input_format_context)
+			avformat_close_input(&audio_input_format_context);
+		close_stream(&audio_st);
+	}
+	if (!(fmt->flags & AVFMT_NOFILE))
+		/* Close the output file. */
+		avio_closep(&output_format_context->pb);
+	/* free the stream */
+	avformat_free_context(output_format_context);
+}
+
 BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, double audioOffsetSeconds, BOOL spherical, BOOL spherical_stereo, AVCodecID video_codec_id)
 {
 	audioOffsetTimestamp = (int64_t)(audioOffsetSeconds * vidFmt.audioSampleRate);
@@ -339,13 +359,19 @@ BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, double
 	/* allocate the output media context */
 	avformat_alloc_output_context2(&output_format_context, NULL, NULL, outputFile);
 	if (!output_format_context)
+	{
+		freeResources();
 		return FALSE;
+	}
 	fmt = output_format_context->oformat;
 	
 	/* Add the audio and video streams using the default format codecs
 	 * and initialize the codecs. */
 	if (!add_stream(&video_st, output_format_context, &video_codec, video_codec_id, vidFmt))
+	{
+		freeResources();
 		return FALSE;
+	}
 	//Spherical metadata
 	if (spherical)
 	{
@@ -365,7 +391,7 @@ BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, double
 		if ((ret = avformat_open_input(&audio_input_format_context, audioFile, NULL, NULL)))
 		{
 			fprintf(stderr, "Could not open input file '%s' (error '%d')\n", audioFile, ret);
-			audio_input_format_context = NULL;
+			freeResources();
 			return FALSE;
 		}
 
@@ -373,7 +399,7 @@ BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, double
 		if ((ret = avformat_find_stream_info(audio_input_format_context, NULL)))
 		{
 			fprintf(stderr, "Could not open find stream info (error '%d')\n", ret);
-			avformat_close_input(&audio_input_format_context);
+			freeResources();
 			return FALSE;
 		}
 		if (!add_stream(&audio_st, output_format_context, &audio_codec, (audio_input_format_context)->streams[0]->codecpar->codec_id, vidFmt))
@@ -385,12 +411,18 @@ BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, double
 	if (encode_video)
 	{
 		if (!open_video(output_format_context, video_codec, &video_st, opt))
+		{
+			freeResources();
 			return FALSE;
+		}
 	}
 	if (encode_audio)
 	{
 		if (!open_audio(output_format_context, audio_codec, &audio_st, opt))
+		{
+			freeResources();
 			return FALSE;
+		}
 	}
 	av_dump_format(output_format_context, 0, outputFile, 1);
 	/* open the output file, if needed */
@@ -399,8 +431,8 @@ BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, double
 		ret = avio_open(&output_format_context->pb, outputFile, AVIO_FLAG_WRITE);
 		if (ret < 0)
 		{
-			fprintf(stderr, "Could not open '%s': %d\n", outputFile,
-				ret);
+			fprintf(stderr, "Could not open '%s': %d\n", outputFile, ret);
+			freeResources();
 			return FALSE;
 		}
 	}
@@ -409,6 +441,7 @@ BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, double
 	if (ret < 0) 
 	{
 		fprintf(stderr, "Error occurred when opening output file: %d\n", ret);
+		freeResources();
 		return FALSE;
 	}
 	return TRUE;
@@ -430,18 +463,6 @@ void endVideoEnc()
 	 * av_write_trailer() may try to use memory that was freed on
 	 * av_codec_close(). */
 	av_write_trailer(output_format_context);
-	/* Close each codec. */
-	if (have_video)
-		close_stream(&video_st);
-	if (have_audio)
-	{
-		if (audio_input_format_context)
-			avformat_close_input(&audio_input_format_context);
-		close_stream(&audio_st);
-	}
-	if (!(fmt->flags & AVFMT_NOFILE))
-		/* Close the output file. */
-		avio_closep(&output_format_context->pb);
-	/* free the stream */
-	avformat_free_context(output_format_context);
+	freeResources();
 }
+
