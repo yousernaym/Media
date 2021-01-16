@@ -225,11 +225,12 @@ static BOOL open_video(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, A
 	av_dict_set(&opt, "crf", crf, 0); //Constant qualitty mode
 
 	//VP9 options
-	//av_dict_set(&opt, "b:v", "0", 0); //Constant qualitty mode
+	av_dict_set(&opt, "b:v", "0", 0); //Constant qualitty mode
 	av_dict_set(&opt, "deadline", "good", 0); //Encoding speed vs compression
 	av_dict_set(&opt, "quality", "good", 0); //Same as deadline?
 	av_dict_set(&opt, "row-mt", "1", 0); //Row-based multithreading
-	av_dict_set(&opt, "lossless", "1", 0);
+	if (!strcmp(crf, "0"))
+		av_dict_set(&opt, "lossless", "1", 0);
 
 	/* open the codec */
 	ret = avcodec_open2(c, codec, &opt);
