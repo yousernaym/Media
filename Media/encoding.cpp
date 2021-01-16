@@ -213,7 +213,7 @@ static AVFrame* alloc_picture(enum AVPixelFormat pix_fmt, int width, int height)
 	return picture;
 }
 
-static BOOL open_video(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, AVDictionary* opt_arg)
+static BOOL open_video(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, AVDictionary* opt_arg, const char* crf)
 {
 	int ret;
 	AVCodecContext* c = ost->enc;
@@ -222,7 +222,7 @@ static BOOL open_video(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, A
 	
 	//H264 options
 	av_dict_set(&opt, "preset", "ultrafast", 0);
-	av_dict_set(&opt, "crf", "17", 0); //Constant qualitty mode
+	av_dict_set(&opt, "crf", crf, 0); //Constant qualitty mode
 
 	//VP9 options
 	//av_dict_set(&opt, "b:v", "0", 0); //Constant qualitty mode
@@ -349,7 +349,7 @@ void freeResources()
 	avformat_free_context(output_format_context);
 }
 
-BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, double audioOffsetSeconds, BOOL spherical, BOOL spherical_stereo, AVCodecID video_codec_id)
+BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, double audioOffsetSeconds, BOOL spherical, BOOL spherical_stereo, AVCodecID video_codec_id, const char* crf)
 {
 	audioOffsetTimestamp = (int64_t)(audioOffsetSeconds * vidFmt.audioSampleRate);
 	encode_video = have_video = 1;
@@ -410,7 +410,7 @@ BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, double
 	 * video codecs and allocate the necessary encode buffers. */
 	if (encode_video)
 	{
-		if (!open_video(output_format_context, video_codec, &video_st, opt))
+		if (!open_video(output_format_context, video_codec, &video_st, opt, crf))
 		{
 			freeResources();
 			return FALSE;
