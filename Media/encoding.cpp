@@ -64,8 +64,7 @@ static BOOL add_stream(OutputStream* ost, AVFormatContext* oc, AVCodec** codec, 
 	*codec = avcodec_find_encoder(codec_id);
 	if (!(*codec))
 	{
-		fprintf(stderr, "Could not find encoder for '%s'\n",
-		avcodec_get_name(codec_id));
+		fprintf(stderr, "Could not find encoder for '%s'\n", avcodec_get_name(codec_id));
 		return FALSE;
 	}
 	ost->st = avformat_new_stream(oc, NULL);
@@ -352,7 +351,6 @@ void freeResources()
 
 BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, double audioOffsetSeconds, BOOL spherical, BOOL spherical_stereo, AVCodecID video_codec_id, const char* crf)
 {
-	audioOffsetTimestamp = (int64_t)(audioOffsetSeconds * vidFmt.audioSampleRate);
 	encode_video = have_video = 1;
 	encode_audio = have_audio = audioFile != NULL && strlen(audioFile) > 0;
 	AVDictionary* opt = NULL;
@@ -366,8 +364,8 @@ BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, double
 	}
 	fmt = output_format_context->oformat;
 	
-	/* Add the audio and video streams using the default format codecs
-	 * and initialize the codecs. */
+	/* Add the video stream using the default format codecs
+	 * and initialize the codec. */
 	if (!add_stream(&video_st, output_format_context, &video_codec, video_codec_id, vidFmt))
 	{
 		freeResources();
@@ -403,8 +401,9 @@ BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, double
 			freeResources();
 			return FALSE;
 		}
-		if (!add_stream(&audio_st, output_format_context, &audio_codec, (audio_input_format_context)->streams[0]->codecpar->codec_id, vidFmt))
+		if (!add_stream(&audio_st, output_format_context, &audio_codec, audio_input_format_context->streams[0]->codecpar->codec_id, vidFmt))
 			return FALSE;
+		audioOffsetTimestamp = (int64_t)(audioOffsetSeconds * audio_st.enc->sample_rate);
 	}
 
 	/* Now that all the parameters are set, we can open the audio and

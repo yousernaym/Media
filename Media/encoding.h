@@ -7,10 +7,6 @@ struct VideoFormat
 	UINT32 width;
 	UINT32 height;
 	float fps;
-	UINT32 bitRate;
-	UINT32 audioSampleRate;
-	UINT32 aspectNumerator;
-	UINT32 aspectDenominator;
 };
 #pragma pack(pop)
 
