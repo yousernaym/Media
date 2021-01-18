@@ -167,6 +167,7 @@ static int write_audio_frame(AVFormatContext* oc, OutputStream* ost)
 {
 	AVPacket pkt = { 0 }; // data and size must be 0;
 	int ret;
+	
 	av_init_packet(&pkt);
 	if ((ret = av_read_frame(audio_input_format_context, &pkt)) < 0)
 	{
@@ -179,10 +180,42 @@ static int write_audio_frame(AVFormatContext* oc, OutputStream* ost)
 		}
 	}
 	
-	pkt.pts += audioOffsetTimestamp;
-	pkt.dts += audioOffsetTimestamp;
+	//If first packet and audio should be delayed, fill beginning with silence
+	static int64_t ptsOffset;
+	static int64_t posOffset;
+	if (pkt.pts == 0)
+	{
+		ptsOffset = 0;
+		posOffset = 0;
+	}
+	if (audioOffsetTimestamp > 0 && pkt.pts == 0)
+	{
+		posOffset = pkt.pos;
+		int audioSilentPackets = (int)(audioOffsetTimestamp / pkt.duration);
+		while (audioSilentPackets-- > 0)
+		{
+			//It seems the packet gets unusable after the call to av_write_interleaved, so allocate/deallocate every iteration
+			AVPacket* silentPkt = av_packet_alloc();
+			silentPkt->data = (uint8_t*)calloc(pkt.size, 1);
+			silentPkt->pts = silentPkt->dts = ptsOffset;
+			silentPkt->pos = posOffset;
+			silentPkt->size = pkt.size;
+			silentPkt->duration = pkt.duration;
+			silentPkt->flags = pkt.flags;
+			ret = write_frame(output_format_context, ost, silentPkt);
+			ptsOffset += pkt.duration;
+			posOffset += pkt.size;
+			free(silentPkt->data);  //Is this really needed or is ownership transferred to FFmpeg?
+			av_packet_free(&silentPkt);
+		}
+	}
+	
+	pkt.pts += ptsOffset;
+	pkt.dts += ptsOffset;
+	pkt.pos += posOffset;
 	if (pkt.pts < 0)
 		return 0;
+	
 	ret = write_frame(output_format_context, ost, &pkt);
 	if (ret < 0) 
 		fprintf(stderr, "Error while writing audio frame: %d\n", ret);
@@ -222,6 +255,8 @@ static BOOL open_video(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, A
 	//H264 options
 	av_dict_set(&opt, "preset", "ultrafast", 0);
 	av_dict_set(&opt, "crf", crf, 0); //Constant qualitty mode
+
+
 
 	//VP9 options
 	av_dict_set(&opt, "b:v", "0", 0); //Constant qualitty mode
