@@ -253,10 +253,8 @@ static BOOL open_video(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, A
 	av_dict_copy(&opt, opt_arg, 0);
 	
 	//H264 options
-	av_dict_set(&opt, "preset", "ultrafast", 0);
+	av_dict_set(&opt, "preset", "veryfast", 0);
 	av_dict_set(&opt, "crf", crf, 0); //Constant qualitty mode
-
-
 
 	//VP9 options
 	av_dict_set(&opt, "b:v", "0", 0); //Constant qualitty mode
