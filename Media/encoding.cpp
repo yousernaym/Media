@@ -251,18 +251,20 @@ static BOOL open_video(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, A
 	AVCodecContext* c = ost->enc;
 	AVDictionary* opt = NULL;
 	av_dict_copy(&opt, opt_arg, 0);
-	
-	//H264 options
-	av_dict_set(&opt, "preset", "veryfast", 0);
+
 	av_dict_set(&opt, "crf", crf, 0); //Constant qualitty mode
 
-	//VP9 options
-	av_dict_set(&opt, "b:v", "0", 0); //Constant qualitty mode
-	av_dict_set(&opt, "deadline", "good", 0); //Encoding speed vs compression
-	av_dict_set(&opt, "quality", "good", 0); //Same as deadline?
-	av_dict_set(&opt, "row-mt", "1", 0); //Row-based multithreading
-	if (!strcmp(crf, "0"))
-		av_dict_set(&opt, "lossless", "1", 0);
+	if (codec->id == AV_CODEC_ID_H264)
+		av_dict_set(&opt, "preset", "veryfast", 0);
+	else if (codec->id == AV_CODEC_ID_VP9)
+	{
+		av_dict_set(&opt, "b:v", "0", 0); //Constant qualitty mode
+		av_dict_set(&opt, "deadline", "good", 0); //Encoding speed vs compression
+		av_dict_set(&opt, "quality", "good", 0); //Same as deadline?
+		av_dict_set(&opt, "row-mt", "1", 0); //Row-based multithreading
+		if (!strcmp(crf, "0"))
+			av_dict_set(&opt, "lossless", "1", 0);
+	}
 
 	/* open the codec */
 	ret = avcodec_open2(c, codec, &opt);
