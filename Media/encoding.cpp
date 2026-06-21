@@ -85,8 +85,13 @@ static BOOL add_stream(OutputStream* ost, AVFormatContext* oc, const AVCodec** c
 	{
 	case AVMEDIA_TYPE_AUDIO:
 	{
-		c->sample_fmt = (*codec)->sample_fmts ?
-			(*codec)->sample_fmts[0] : AV_SAMPLE_FMT_FLTP;
+		/* FFmpeg 7.1+ deprecated AVCodec::sample_fmts in favour of querying the
+		 * encoder's supported sample formats via avcodec_get_supported_config. */
+		const enum AVSampleFormat* sample_fmts = NULL;
+		int cfg_ret = avcodec_get_supported_config(NULL, *codec, AV_CODEC_CONFIG_SAMPLE_FORMAT,
+			0, (const void**)&sample_fmts, NULL);
+		c->sample_fmt = (cfg_ret >= 0 && sample_fmts) ?
+			sample_fmts[0] : AV_SAMPLE_FMT_FLTP;
 		c->sample_rate = audio_input_format_context->streams[0]->time_base.den;
 		/* This app always produces stereo audio. FFmpeg 7+ replaced the
 		 * channels/channel_layout fields with the AVChannelLayout API. */
@@ -161,8 +166,9 @@ static int write_audio_frame(AVFormatContext* oc, OutputStream* ost)
 {
 	AVPacket pkt = { 0 }; // data and size must be 0;
 	int ret;
-	
-	av_init_packet(&pkt);
+
+	/* av_init_packet is deprecated; the zero-initialised packet above is filled
+	 * in by av_read_frame, which is all this stack packet is used for. */
 	if ((ret = av_read_frame(audio_input_format_context, &pkt)) < 0)
 	{
 		if (ret == AVERROR_EOF)
@@ -415,11 +421,11 @@ BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, double
 	{
 		char stereo_arg[100];
 		if (spherical_stereo)
-			strcpy(stereo_arg, "<GSpherical:StereoMode>top-bottom</GSpherical:StereoMode>");
+			strcpy_s(stereo_arg, sizeof(stereo_arg), "<GSpherical:StereoMode>top-bottom</GSpherical:StereoMode>");
 		else
 			stereo_arg[0] = 0;
 		char metadata_string[1000];
-		sprintf(metadata_string, "<rdf:SphericalVideo xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\" xmlns:GSpherical=\"http://ns.google.com/videos/1.0/spherical/\"> <GSpherical:Spherical>true</GSpherical:Spherical> <GSpherical:Stitched>true</GSpherical:Stitched> <GSpherical:ProjectionType>equirectangular</GSpherical:ProjectionType> %s </rdf:SphericalVideo>", stereo_arg);
+		sprintf_s(metadata_string, sizeof(metadata_string), "<rdf:SphericalVideo xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\" xmlns:GSpherical=\"http://ns.google.com/videos/1.0/spherical/\"> <GSpherical:Spherical>true</GSpherical:Spherical> <GSpherical:Stitched>true</GSpherical:Stitched> <GSpherical:ProjectionType>equirectangular</GSpherical:ProjectionType> %s </rdf:SphericalVideo>", stereo_arg);
 		av_dict_set(&video_st.st->metadata, "spherical-video", metadata_string, 0);
 	}
 

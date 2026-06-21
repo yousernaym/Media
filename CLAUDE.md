@@ -23,6 +23,24 @@ next to `media.dll`. See the repo-root [README.md](../../README.md).
   so when built from the root solution `media.dll` lands in the repo-root `x64\<Config>\`, and VisualMusic's
   post-build copies it into the app output.
 
+## Updating FFmpeg
+
+The FFmpeg version is whatever the `builtin-baseline` in [vcpkg.json](vcpkg.json) resolves to (no
+`vcpkg install`/`vcpkg upgrade` in manifest mode). To move to a newer FFmpeg:
+
+1. Update the vcpkg checkout to a newer snapshot and re-bootstrap (from the vcpkg root, e.g. `D:\dev\vcpkg`):
+   `git fetch origin && git checkout <newer-release-tag-or-origin/master> && .\bootstrap-vcpkg.bat`.
+2. Bump this manifest's baseline to the new snapshot: `vcpkg x-update-baseline --x-manifest-root=<this dir>`
+   (or set `builtin-baseline` by hand to `git -C <vcpkg root> rev-parse HEAD`). MidMix's manifest is
+   separate, so bumping here moves FFmpeg only.
+3. Rebuild `VisualMusic.sln` — the new version installs automatically (compiles from source once, then cached).
+4. **Test a real video export.** A newer FFmpeg can remove/deprecate APIs and break [Media/encoding.cpp](Media/encoding.cpp)
+   (e.g. the 4.4 → 8.1 jump dropped `avcodec_encode_video2` and the `channels`/`channel_layout` fields).
+
+To pin an exact version instead of the baseline default, add an `overrides` entry to [vcpkg.json](vcpkg.json),
+e.g. `"overrides": [ { "name": "ffmpeg", "version": "8.1.1" } ]`; the version must exist at/after the baseline
+(browse `<vcpkg root>\versions\f-\ffmpeg.json`).
+
 ## Native interface (P/Invoke surface)
 
 The exact exported C functions the app binds to are declared in

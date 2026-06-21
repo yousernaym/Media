@@ -56,6 +56,10 @@
        the unsupported Win32 configs stay on the global/classic integration. -->
   <PropertyGroup Label="Vcpkg" Condition="'$(Platform)'=='x64'">
     <VcpkgEnableManifest>true</VcpkgEnableManifest>
+    <!-- Opt out of auto-bootstrap (vcpkg is bootstrapped manually per README). This
+         also avoids vcpkg.targets importing both Bootstrap.targets and the
+         GetGlobalProperties task, which would otherwise raise a benign MSB4011. -->
+    <VcpkgAutoBootstrap>false</VcpkgAutoBootstrap>
   </PropertyGroup>
   <ImportGroup Label="ExtensionSettings">
   </ImportGroup>
