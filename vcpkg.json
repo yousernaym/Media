@@ -1,0 +1,12 @@
+{
+  "name": "media",
+  "version-string": "1.0.0",
+  "description": "Native media layer for Visual Music (FFmpeg video export + Media Foundation playback).",
+  "builtin-baseline": "f3e10653cc27d62a37a3763cd84b38bca07c6075",
+  "dependencies": [
+    {
+      "name": "ffmpeg",
+      "features": [ "x264" ]
+    }
+  ]
+}

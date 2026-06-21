@@ -18,6 +18,7 @@ extern "C"
 	#include <libavutil/opt.h>
 	#include <libswresample/swresample.h>
 	#include <libavutil/avassert.h>
+	#include <libavutil/channel_layout.h>
 	#include <libavformat/avio.h>
 }
 
@@ -38,10 +39,10 @@ typedef struct OutputStream
 } OutputStream;
 
 static OutputStream video_st = { 0 }, audio_st = { 0 };
-static AVOutputFormat* fmt;
+static const AVOutputFormat* fmt;
 static AVFormatContext* output_format_context = NULL;
 static AVFormatContext* audio_input_format_context = NULL;
-static AVCodec* audio_codec = NULL, * video_codec = NULL;
+static const AVCodec* audio_codec = NULL, * video_codec = NULL;
 static int encode_video, have_video, encode_audio, have_audio;
 static int64_t audioOffsetTimestamp;
 
@@ -56,10 +57,9 @@ static int write_frame(AVFormatContext* fmt_ctx, OutputStream* ost, AVPacket* pk
 }
 
 /* Add an output stream. */
-static BOOL add_stream(OutputStream* ost, AVFormatContext* oc, AVCodec** codec, enum AVCodecID codec_id, const VideoFormat &vidFmt)
+static BOOL add_stream(OutputStream* ost, AVFormatContext* oc, const AVCodec** codec, enum AVCodecID codec_id, const VideoFormat &vidFmt)
 {
 	AVCodecContext* c;
-	int i;
 	/* find the encoder */
 	*codec = avcodec_find_encoder(codec_id);
 	if (!(*codec))
@@ -84,23 +84,17 @@ static BOOL add_stream(OutputStream* ost, AVFormatContext* oc, AVCodec** codec, 
 	switch ((*codec)->type)
 	{
 	case AVMEDIA_TYPE_AUDIO:
+	{
 		c->sample_fmt = (*codec)->sample_fmts ?
 			(*codec)->sample_fmts[0] : AV_SAMPLE_FMT_FLTP;
 		c->sample_rate = audio_input_format_context->streams[0]->time_base.den;
-		c->channels = av_get_channel_layout_nb_channels(c->channel_layout);
-		c->channel_layout = AV_CH_LAYOUT_STEREO;
-		if ((*codec)->channel_layouts)
-		{
-			c->channel_layout = (*codec)->channel_layouts[0];
-			for (i = 0; (*codec)->channel_layouts[i]; i++)
-			{
-				if ((*codec)->channel_layouts[i] == AV_CH_LAYOUT_STEREO)
-					c->channel_layout = AV_CH_LAYOUT_STEREO;
-			}
-		}
-		c->channels = av_get_channel_layout_nb_channels(c->channel_layout);
+		/* This app always produces stereo audio. FFmpeg 7+ replaced the
+		 * channels/channel_layout fields with the AVChannelLayout API. */
+		AVChannelLayout stereo = AV_CHANNEL_LAYOUT_STEREO;
+		av_channel_layout_copy(&c->ch_layout, &stereo);
 		ost->st->time_base = { 1, c->sample_rate };
 		break;
+	}
 	case AVMEDIA_TYPE_VIDEO:
 		c->codec_id = codec_id;
 		/* Resolution must be a multiple of two. */
@@ -133,7 +127,7 @@ static BOOL add_stream(OutputStream* ost, AVFormatContext* oc, AVCodec** codec, 
 
 /**************************************************************/
 /* audio output */
-static BOOL open_audio(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, AVDictionary* opt_arg)
+static BOOL open_audio(AVFormatContext* oc, const AVCodec* codec, OutputStream* ost, AVDictionary* opt_arg)
 {
 	int ret;
 	AVCodecContext* c;
@@ -245,7 +239,7 @@ static AVFrame* alloc_picture(enum AVPixelFormat pix_fmt, int width, int height)
 	return picture;
 }
 
-static BOOL open_video(AVFormatContext* oc, AVCodec* codec, OutputStream* ost, AVDictionary* opt_arg, const char* crf)
+static BOOL open_video(AVFormatContext* oc, const AVCodec* codec, OutputStream* ost, AVDictionary* opt_arg, const char* crf)
 {
 	int ret;
 	AVCodecContext* c = ost->enc;
@@ -329,30 +323,40 @@ static AVFrame* get_video_frame(OutputStream* ost, const uint8_t* pixels)
 static int write_video_frame(AVFormatContext* oc, OutputStream* ost, const uint8_t* pixels)
 {
 	int ret;
-	AVCodecContext* c;
-	AVFrame* frame;
-	int got_packet = 0;
-	AVPacket pkt = { 0 };
-	c = ost->enc;
-	frame = get_video_frame(ost, pixels);
-	av_init_packet(&pkt);
-	/* encode the image */
-	ret = avcodec_encode_video2(c, &pkt, frame, &got_packet);
-	if (ret < 0) 
+	AVCodecContext* c = ost->enc;
+	AVFrame* frame = get_video_frame(ost, pixels);
+
+	/* hand the frame to the encoder (FFmpeg 5+ send/receive API; the old
+	 * avcodec_encode_video2 was removed in FFmpeg 5.0) */
+	ret = avcodec_send_frame(c, frame);
+	if (ret < 0)
 	{
-		fprintf(stderr, "Error encoding video frame: %d\n", ret);
+		fprintf(stderr, "Error sending video frame to encoder: %d\n", ret);
 		exit(1);
 	}
-	if (got_packet) 
-		ret = write_frame(oc, ost, &pkt);
-	else 
-		ret = 0;
-	if (ret < 0) 
+	/* drain whatever packets are now available */
+	AVPacket* pkt = av_packet_alloc();
+	while (ret >= 0)
 	{
-		fprintf(stderr, "Error while writing video frame: %d\n", ret);
-		exit(1);
+		ret = avcodec_receive_packet(c, pkt);
+		if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+			break;
+		if (ret < 0)
+		{
+			fprintf(stderr, "Error encoding video frame: %d\n", ret);
+			av_packet_free(&pkt);
+			exit(1);
+		}
+		if (write_frame(oc, ost, pkt) < 0)
+		{
+			fprintf(stderr, "Error while writing video frame: %d\n", ret);
+			av_packet_free(&pkt);
+			exit(1);
+		}
+		av_packet_unref(pkt);
 	}
-	return (frame || got_packet) ? 0 : 1;
+	av_packet_free(&pkt);
+	return 0;
 }
 
 static void close_stream(OutputStream* ost)

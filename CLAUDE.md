@@ -10,7 +10,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Video export** via FFmpeg (H.264/x264; supports spherical/360 and stereo output).
 - **Audio playback** via Windows Media Foundation.
 
-FFmpeg is supplied through vcpkg (`ffmpeg[x264]:x64-windows`) — see the repo-root [README.md](../../README.md).
+FFmpeg is supplied through vcpkg in **manifest mode**: the dependency (`ffmpeg` with the `x264` feature) is
+declared in [vcpkg.json](vcpkg.json) at this submodule's root, with versions pinned via `builtin-baseline`.
+The x64 build auto-restores it into a local `vcpkg_installed/` (enabled by `VcpkgEnableManifest` in
+[Media/Media.vcxproj](Media/Media.vcxproj)); `VcpkgAutoLink` then links the libs and applocal copies the DLLs
+next to `media.dll`. See the repo-root [README.md](../../README.md).
 
 ## Build & output
 
