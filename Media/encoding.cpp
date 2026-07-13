@@ -42,14 +42,20 @@ static OutputStream video_st = { 0 }, audio_st = { 0 };
 static const AVOutputFormat* fmt;
 static AVFormatContext* output_format_context = NULL;
 static AVFormatContext* audio_input_format_context = NULL;
-static const AVCodec* audio_codec = NULL, * video_codec = NULL;
+static const AVCodec* video_codec = NULL;
 static int encode_video, have_video, encode_audio, have_audio;
 static int64_t audioOffsetTimestamp;
+// Input audio stream time base, used to rescale timestamps when the audio is stream-copied
+// (no encoder — e.g. MP3/WMA masters that FFmpeg can mux but not encode).
+static AVRational audio_in_time_base;
 
 static int write_frame(AVFormatContext* fmt_ctx, OutputStream* ost, AVPacket* pkt)
 {
-	/* rescale output packet timestamp values from codec to stream timebase */
-	av_packet_rescale_ts(pkt, ost->enc->time_base, ost->st->time_base);
+	/* Rescale packet timestamps to the output stream's timebase. For an encoded stream the source
+	 * timebase is the encoder's; for a stream-copied audio track (no encoder) it's the input
+	 * stream's timebase (the muxer may have changed ost->st->time_base while writing the header). */
+	AVRational src_time_base = ost->enc ? ost->enc->time_base : audio_in_time_base;
+	av_packet_rescale_ts(pkt, src_time_base, ost->st->time_base);
 	ost->dest_pts = pkt->pts;
 	pkt->stream_index = ost->st->index;
 	/* Write the compressed frame to the media file. */
@@ -83,23 +89,6 @@ static BOOL add_stream(OutputStream* ost, AVFormatContext* oc, const AVCodec** c
 	ost->enc = c;
 	switch ((*codec)->type)
 	{
-	case AVMEDIA_TYPE_AUDIO:
-	{
-		/* FFmpeg 7.1+ deprecated AVCodec::sample_fmts in favour of querying the
-		 * encoder's supported sample formats via avcodec_get_supported_config. */
-		const enum AVSampleFormat* sample_fmts = NULL;
-		int cfg_ret = avcodec_get_supported_config(NULL, *codec, AV_CODEC_CONFIG_SAMPLE_FORMAT,
-			0, (const void**)&sample_fmts, NULL);
-		c->sample_fmt = (cfg_ret >= 0 && sample_fmts) ?
-			sample_fmts[0] : AV_SAMPLE_FMT_FLTP;
-		c->sample_rate = audio_input_format_context->streams[0]->time_base.den;
-		/* This app always produces stereo audio. FFmpeg 7+ replaced the
-		 * channels/channel_layout fields with the AVChannelLayout API. */
-		AVChannelLayout stereo = AV_CHANNEL_LAYOUT_STEREO;
-		av_channel_layout_copy(&c->ch_layout, &stereo);
-		ost->st->time_base = { 1, c->sample_rate };
-		break;
-	}
 	case AVMEDIA_TYPE_VIDEO:
 		c->codec_id = codec_id;
 		/* Resolution must be a multiple of two. */
@@ -130,31 +119,27 @@ static BOOL add_stream(OutputStream* ost, AVFormatContext* oc, const AVCodec** c
 	return TRUE;
 }
 
-/**************************************************************/
-/* audio output */
-static BOOL open_audio(AVFormatContext* oc, const AVCodec* codec, OutputStream* ost, AVDictionary* opt_arg)
+/* Add the audio output stream. The audio is always stream-copied (write_audio_frame remuxes the
+ * input packets unchanged), so no encoder is involved: the input stream's codec parameters — which
+ * carry the true sample rate, channel layout and extradata — are copied verbatim. ost->enc stays
+ * NULL; write_frame uses audio_in_time_base to rescale timestamps for this stream. */
+static BOOL add_audio_stream_copy(OutputStream* ost, AVFormatContext* oc, AVStream* in_stream)
 {
-	int ret;
-	AVCodecContext* c;
-	AVDictionary* opt = NULL;
-	c = ost->enc;
-	/* open it */
-	av_dict_copy(&opt, opt_arg, 0);
-	ret = avcodec_open2(c, codec, &opt);
-	av_dict_free(&opt);
-	if (ret < 0) 
+	ost->st = avformat_new_stream(oc, NULL);
+	if (!ost->st)
 	{
-		fprintf(stderr, "Could not open audio codec: %d\n", ret);
+		fprintf(stderr, "Could not allocate audio stream\n");
 		return FALSE;
 	}
-	
-	/* copy the stream parameters to the muxer */
-	ret = avcodec_parameters_from_context(ost->st->codecpar, c);
-	if (ret < 0) 
+	ost->st->id = oc->nb_streams - 1;
+	if (avcodec_parameters_copy(ost->st->codecpar, in_stream->codecpar) < 0)
 	{
-		fprintf(stderr, "Could not copy the stream parameters\n");
+		fprintf(stderr, "Could not copy audio codec parameters\n");
 		return FALSE;
 	}
+	ost->st->codecpar->codec_tag = 0;   // let the muxer pick a tag valid for the output container
+	ost->st->time_base = in_stream->time_base;
+	ost->enc = NULL;                    // no encoder: this stream is copied, not encoded
 	return TRUE;
 }
 
@@ -446,24 +431,31 @@ BOOL beginVideoEnc(char *outputFile, char* audioFile, VideoFormat vidFmt, double
 			freeResources();
 			return FALSE;
 		}
-		if (!add_stream(&audio_st, output_format_context, &audio_codec, audio_input_format_context->streams[0]->codecpar->codec_id, vidFmt))
-			return FALSE;
-		audioOffsetTimestamp = (int64_t)(audioOffsetSeconds * audio_st.enc->sample_rate);
-	}
 
-	/* Now that all the parameters are set, we can open the audio and
-	 * video codecs and allocate the necessary encode buffers. */
-	if (encode_video)
-	{
-		if (!open_video(output_format_context, video_codec, &video_st, opt, crf))
+		/* The audio is always stream-copied into the output (write_audio_frame just remuxes the
+		 * input packets — nothing is re-encoded). The old code nevertheless allocated and opened an
+		 * *encoder* for the input's codec id, deriving the sample rate from time_base.den. That only
+		 * works for formats whose demuxer uses a 1/sample_rate timebase (WAV, M4A); for MP3 the
+		 * bogus rate made the encoder fail to open ("couldn't initialize video encoding"), and for
+		 * WMA (ASF timebase = 1/1000) it silently tagged the stream as 1000 Hz. Copying the input
+		 * stream's codec parameters instead is correct for every format the container accepts. */
+		AVStream* audio_in_stream = audio_input_format_context->streams[0];
+		audio_in_time_base = audio_in_stream->time_base;
+		if (!add_audio_stream_copy(&audio_st, output_format_context, audio_in_stream))
 		{
 			freeResources();
 			return FALSE;
 		}
+		/* Offset in input-stream timebase units: the silence-padding loop in write_audio_frame
+		 * counts packets via pkt.duration, which av_read_frame reports in that timebase. */
+		audioOffsetTimestamp = (int64_t)(audioOffsetSeconds / av_q2d(audio_in_time_base));
 	}
-	if (encode_audio)
+
+	/* Now that all the parameters are set, we can open the video codec and
+	 * allocate the necessary encode buffers. */
+	if (encode_video)
 	{
-		if (!open_audio(output_format_context, audio_codec, &audio_st, opt))
+		if (!open_video(output_format_context, video_codec, &video_st, opt, crf))
 		{
 			freeResources();
 			return FALSE;
