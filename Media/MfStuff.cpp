@@ -13,6 +13,8 @@ BOOL closeAudioFileForPlayback();
 #pragma region dll_exports
 // True when initMF's CoInitializeEx returned S_OK/S_FALSE (we must balance with CoUninitialize).
 // False when COM was already on another apartment (RPC_E_CHANGED_MODE) — do not uninit.
+// Not a nest count: callers must pair one closeMF per successful initMF. A second initMF
+// before closeMF overwrites this flag, so only one CoUninitialize runs (app/tests call once).
 static bool s_coInitOwned = false;
 
 BOOL initMF()
