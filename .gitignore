@@ -32,3 +32,7 @@ _ReSharper*/
 packages/
 #vcpkg manifest-mode install tree
 vcpkg_installed/
+
+# Allow checked-in test fixtures (silence.wav)
+!test-files/
+!test-files/**

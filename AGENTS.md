@@ -60,8 +60,6 @@ See [../../AGENTS.md](../../AGENTS.md) for the repo-wide picture and
 
 ## Testing
 
-P/Invoke integration harness ([Media.Tests](Media.Tests/Media.Tests.csproj)); requires `media.dll` from an x64 build:
-
-```powershell
-dotnet test Media.Tests\Media.Tests.csproj --filter "Category=Integration" --nologo
-```
+There is no C# test project in this repo. P/Invoke playback/encode smoke tests live in Visual Music’s
+`VisualMusic.Tests` (`Category=Integration`) next to [../../VisualMusic/Media.cs](../../VisualMusic/Media.cs).
+Fixture: [`test-files/silence.wav`](test-files/silence.wav). See [../../AGENTS.md](../../AGENTS.md).
