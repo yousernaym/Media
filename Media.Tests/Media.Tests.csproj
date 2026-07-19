@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <PlatformTarget>x64</PlatformTarget>
+    <RootNamespace>VisualMusic.MediaTests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\..\VisualMusic\Media.cs" Link="Media.cs" />
+    <Compile Include="..\..\..\VisualMusic\AvCodecId.cs" Link="AvCodecId.cs" />
+  </ItemGroup>
+
+  <Target Name="CopyNativeMedia" AfterTargets="Build">
+    <PropertyGroup>
+      <!-- Prefer freshly built Media project OutDir; fall back to solution x64\<Config>\ -->
+      <_MediaOut Condition="Exists('$(MSBuildThisFileDirectory)..\Media\x64\$(Configuration)\media.dll')">$(MSBuildThisFileDirectory)..\Media\x64\$(Configuration)\</_MediaOut>
+      <_MediaOut Condition="'$(_MediaOut)'=='' and Exists('$(MSBuildThisFileDirectory)..\..\..\x64\$(Configuration)\media.dll')">$(MSBuildThisFileDirectory)..\..\..\x64\$(Configuration)\</_MediaOut>
+    </PropertyGroup>
+    <ItemGroup Condition="'$(_MediaOut)'!=''">
+      <_NativeDlls Include="$(_MediaOut)*.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_NativeDlls)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" Condition="'@(_NativeDlls)'!=''" />
+  </Target>
+
+</Project>

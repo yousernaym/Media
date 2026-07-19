@@ -13,16 +13,20 @@ BOOL closeAudioFileForPlayback();
 #pragma region dll_exports
 BOOL initMF()
 {
+	// S_FALSE = already initialized on this thread; RPC_E_CHANGED_MODE = different apartment
+	// (e.g. MTA test host) — MF still works, so don't fail the call.
 	HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
-    if (FAILED(hr))
+	bool coInitOwned = SUCCEEDED(hr);
+	if (FAILED(hr) && hr != RPC_E_CHANGED_MODE)
 		return FALSE;
-    hr = MFStartup(MF_VERSION);
+	hr = MFStartup(MF_VERSION);
 	if (FAILED(hr))
 	{
-		CoUninitialize();
+		if (coInitOwned)
+			CoUninitialize();
 		return FALSE;
 	}
-	
+
 	return TRUE;
 }
 

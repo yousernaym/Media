@@ -57,3 +57,11 @@ The exact exported C functions the app binds to are declared in
 
 See [../../CLAUDE.md](../../CLAUDE.md) for the repo-wide picture and
 [../../VisualMusic/CLAUDE.md](../../VisualMusic/CLAUDE.md) for the export/playback flow.
+
+## Testing
+
+P/Invoke integration harness ([Media.Tests](Media.Tests/Media.Tests.csproj)); requires `media.dll` from an x64 build:
+
+```powershell
+dotnet test Media.Tests\Media.Tests.csproj --filter "Category=Integration" --nologo
+```
