@@ -7,6 +7,7 @@ using VmMedia = VisualMusic.Media;
 
 namespace VisualMusic.MediaTests
 {
+    [Collection("MediaSequential")]
     public class MediaIntegrationTests
     {
         static string FindMediaDll()
@@ -104,4 +105,7 @@ namespace VisualMusic.MediaTests
             }
         }
     }
+
+    [CollectionDefinition("MediaSequential", DisableParallelization = true)]
+    public class MediaSequentialCollection { }
 }

@@ -11,6 +11,10 @@ BOOL openAudioFileForPlayback(const WCHAR *file);
 BOOL closeAudioFileForPlayback();
 
 #pragma region dll_exports
+// True when initMF's CoInitializeEx returned S_OK/S_FALSE (we must balance with CoUninitialize).
+// False when COM was already on another apartment (RPC_E_CHANGED_MODE) — do not uninit.
+static bool s_coInitOwned = false;
+
 BOOL initMF()
 {
 	// S_FALSE = already initialized on this thread; RPC_E_CHANGED_MODE = different apartment
@@ -27,6 +31,7 @@ BOOL initMF()
 		return FALSE;
 	}
 
+	s_coInitOwned = coInitOwned;
 	return TRUE;
 }
 
@@ -35,7 +40,11 @@ BOOL closeMF()
 	BOOL b = closeAudioFile();
 	//if (b)
 	b = SUCCEEDED(MFShutdown());
-	CoUninitialize();
+	if (s_coInitOwned)
+	{
+		CoUninitialize();
+		s_coInitOwned = false;
+	}
 	return b;
 }
 
