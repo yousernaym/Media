@@ -77,9 +77,21 @@ BOOL closeAudioFile()
 
 size_t mbToWcString(wchar_t dest[], char source[])
 {
-	size_t chars;
-	mbstowcs_s(&chars, dest, maxFileNameLength, source, maxFileNameLength);
-	return chars;
+	// Paths arrive as UTF-8 from the managed side (LPUTF8Str). Use CP_UTF8 rather than
+	// mbstowcs_s, which follows the CRT locale / ANSI code page and would corrupt
+	// non-ASCII filenames (e.g. under a non-Latin user profile).
+	if (!source)
+	{
+		dest[0] = 0;
+		return 0;
+	}
+	int written = MultiByteToWideChar(CP_UTF8, 0, source, -1, dest, maxFileNameLength);
+	if (written <= 0)
+	{
+		dest[0] = 0;
+		return 0;
+	}
+	return static_cast<size_t>(written);
 }
 
 HRESULT waitForEvent(IMFMediaEventGenerator *pGenerator, MediaEventType type)
