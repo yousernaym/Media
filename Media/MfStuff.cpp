@@ -84,19 +84,33 @@ size_t mbToWcString(wchar_t dest[], char source[])
 
 HRESULT waitForEvent(IMFMediaEventGenerator *pGenerator, MediaEventType type)
 {
-	IMFMediaEvent *pEvent = 0;
-	HRESULT hr = S_OK;
-	for(;;)
+	// Block until the target event arrives, or until an async failure is reported.
+	// MEError (and any event with a failed GetStatus) must exit — otherwise a missing
+	// audio endpoint leaves StartPlayback spinning forever on the event queue.
+	for (;;)
 	{
+		IMFMediaEvent *pEvent = nullptr;
+		HRESULT hr = pGenerator->GetEvent(0, &pEvent);
+		if (FAILED(hr))
+			return hr;
+
+		MediaEventType eventType = MEUnknown;
+		hr = pEvent->GetType(&eventType);
+
+		HRESULT eventStatus = S_OK;
 		if (SUCCEEDED(hr))
-			hr = pGenerator->GetEvent(0, &pEvent);
-		MediaEventType eventType;
-		if (SUCCEEDED(hr))
-			hr = pEvent->GetType(&eventType);
+			hr = pEvent->GetStatus(&eventStatus);
+
 		SafeRelease(&pEvent);
-		if (eventType == type || FAILED(hr))
-			break;
+
+		if (FAILED(hr))
+			return hr;
+		if (FAILED(eventStatus))
+			return eventStatus;
+		if (eventType == MEError)
+			return E_FAIL;
+		if (eventType == type)
+			return S_OK;
 	}
-	return hr;
 }
 
